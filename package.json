@@ -192,6 +192,11 @@
           "from": "node-runtime/win32-x64",
           "to": "node-runtime/win32-x64",
           "filter": ["**/*"]
+        },
+        {
+          "from": "git-runtime/win32-x64",
+          "to": "git-runtime/win32-x64",
+          "filter": ["**/*"]
         }
       ]
     },

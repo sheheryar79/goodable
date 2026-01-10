@@ -227,6 +227,40 @@ if (Test-Path $nodeRuntimePath) {
     Write-Success "Node.js runtime built successfully"
 }
 
+# Step 4.6: Build/Check Git Runtime
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Yellow
+Write-Host "Step 4.6/8 : Build/Check Git Runtime (PortableGit)" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Yellow
+Write-Host ""
+
+$gitRuntimePath = "git-runtime\win32-x64\cmd\git.exe"
+$bashRuntimePath = "git-runtime\win32-x64\bin\bash.exe"
+
+if ((Test-Path $gitRuntimePath) -and (Test-Path $bashRuntimePath)) {
+    Write-Info "Git runtime already exists"
+    $gitVersion = & $gitRuntimePath --version 2>&1
+    Write-Info "Version: $gitVersion"
+    Write-Success "Git runtime check passed"
+} else {
+    Write-Info "Git runtime not found, building..."
+    Write-Info "Running: scripts\build-git-runtime.ps1"
+
+    & ".\scripts\build-git-runtime.ps1"
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Git runtime build failed"
+        exit 1
+    }
+
+    if (-not (Test-Path $bashRuntimePath)) {
+        Write-Error "Git runtime build completed but bash.exe not found"
+        exit 1
+    }
+
+    Write-Success "Git runtime built successfully"
+}
+
 # Step 5: Build Next.js
 Write-Step "5/8" "Build Next.js Application (standalone mode)"
 

@@ -350,3 +350,79 @@ export function getClaudeCodeExecutablePath(): string {
     return path.join(process.cwd(), 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'cli.js');
   }
 }
+
+// ========== Git Runtime (Windows only) ==========
+
+// 模块级缓存，避免高频 fs.existsSync + 日志刷屏
+let _cachedGitDir: string | null | undefined = undefined;
+let _cachedGitBashPath: string | null | undefined = undefined;
+
+/**
+ * Get builtin Git directory (PortableGit)
+ * Windows only - for Claude Code SDK's git-bash requirement
+ */
+export function getBuiltinGitDir(): string | null {
+  // 返回缓存值（包括 null）
+  if (_cachedGitDir !== undefined) {
+    return _cachedGitDir;
+  }
+
+  // 仅 Windows 需要内置 Git
+  if (process.platform !== 'win32') {
+    _cachedGitDir = null;
+    return null;
+  }
+
+  try {
+    const electronResourcesPath = (process as any).resourcesPath as string | undefined;
+
+    // 两段式 fallback：先 resourcesPath，不存在再 cwd
+    // 注意：Electron dev 模式下 resourcesPath 也存在，但指向 Electron 自身，不是我们的 runtime
+    const candidatePaths = [
+      electronResourcesPath ? path.join(electronResourcesPath, 'git-runtime', 'win32-x64') : null,
+      path.join(process.cwd(), 'git-runtime', 'win32-x64'),
+    ].filter((p): p is string => p !== null);
+
+    for (const gitDir of candidatePaths) {
+      if (fs.existsSync(gitDir) && fs.existsSync(path.join(gitDir, 'bin', 'bash.exe'))) {
+        console.log(`[PathConfig] ✅ Found builtin Git: ${gitDir}`);
+        _cachedGitDir = gitDir;
+        return gitDir;
+      }
+    }
+
+    console.log(`[PathConfig] ⚠️ Builtin Git not found in any of: ${candidatePaths.join(', ')}`);
+    _cachedGitDir = null;
+    return null;
+  } catch (error) {
+    console.error('[PathConfig] ❌ Error detecting builtin Git:', error);
+    _cachedGitDir = null;
+    return null;
+  }
+}
+
+/**
+ * Get builtin Git Bash path
+ * For CLAUDE_CODE_GIT_BASH_PATH environment variable
+ */
+export function getBuiltinGitBashPath(): string | null {
+  // 返回缓存值（包括 null）
+  if (_cachedGitBashPath !== undefined) {
+    return _cachedGitBashPath;
+  }
+
+  const gitDir = getBuiltinGitDir();
+  if (!gitDir) {
+    _cachedGitBashPath = null;
+    return null;
+  }
+
+  const bashPath = path.join(gitDir, 'bin', 'bash.exe');
+  if (fs.existsSync(bashPath)) {
+    _cachedGitBashPath = bashPath;
+    return bashPath;
+  }
+
+  _cachedGitBashPath = null;
+  return null;
+}

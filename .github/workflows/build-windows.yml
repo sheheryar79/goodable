@@ -74,6 +74,42 @@ jobs:
       - name: TypeScript type check
         run: npm run type-check
 
+      # 5.5 Build Git Runtime
+      - name: Cache Git Runtime
+        id: cache-git-runtime
+        uses: actions/cache@v4
+        with:
+          path: git-runtime/win32-x64
+          key: git-runtime-win32-x64-2.47.1-${{ hashFiles('scripts/build-git-runtime.ps1') }}
+
+      - name: Build Git Runtime
+        if: steps.cache-git-runtime.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: .\scripts\build-git-runtime.ps1
+
+      - name: Verify Git Runtime
+        shell: pwsh
+        run: |
+          $gitExe = "git-runtime\win32-x64\cmd\git.exe"
+          $bashExe = "git-runtime\win32-x64\bin\bash.exe"
+          $licenseFile = "git-runtime\win32-x64\THIRD_PARTY_LICENSES\git-for-windows-LICENSE.txt"
+
+          if (-not (Test-Path $gitExe)) {
+            Write-Error "git.exe not found"
+            exit 1
+          }
+          if (-not (Test-Path $bashExe)) {
+            Write-Error "bash.exe not found"
+            exit 1
+          }
+          if (-not (Test-Path $licenseFile)) {
+            Write-Error "License file not found"
+            exit 1
+          }
+
+          $version = & $gitExe --version
+          Write-Host "✅ Git Runtime verification passed: $version"
+
       # 5.1 调试：检查脚本文件状态
       - name: Debug - Inspect script file
         shell: pwsh

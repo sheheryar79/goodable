@@ -12,7 +12,7 @@ import { updateProject, getProjectById } from '../project';
 import { createMessage } from '../message';
 import { CLAUDE_DEFAULT_MODEL, normalizeClaudeModelId, getClaudeModelDisplayName } from '@/lib/constants/claudeModels';
 import { previewManager } from '../preview';
-import { PROJECTS_DIR_ABSOLUTE, getClaudeCodeExecutablePath, getBuiltinNodeDir } from '@/lib/config/paths';
+import { PROJECTS_DIR_ABSOLUTE, getClaudeCodeExecutablePath, getBuiltinNodeDir, getBuiltinGitDir, getBuiltinGitBashPath } from '@/lib/config/paths';
 import path from 'path';
 import fs from 'fs/promises';
 import { randomUUID } from 'crypto';
@@ -1322,10 +1322,13 @@ export async function executeClaude(
     return true;
   };
 
-  // 双保险：注入内置 Node.js 到 PATH（同时修改 process.env 和传入 env 参数）
+  // 双保险：注入内置 Node.js 和 Git 到 PATH（同时修改 process.env 和传入 env 参数）
   // 声明在 try 外部以便 catch 块可以访问
   const builtinNodeDir = getBuiltinNodeDir();
-  const originalPath = process.env.PATH;
+  const builtinGitDir = getBuiltinGitDir();
+  const builtinGitBashPath = getBuiltinGitBashPath();
+  // 兼容 Windows PATH 环境变量大小写问题
+  const originalPath = process.env.PATH || process.env.Path || '';
 
   try {
     // 加载并应用 Claude 配置
@@ -1506,18 +1509,37 @@ ${basePrompt}`;
     // 平台数据库应始终连接到 prod.db
     // 子项目数据库通过子项目自己的 .env 文件配置
 
+    // 构建 PATH
+    const pathParts: string[] = [];
     if (builtinNodeDir) {
-      // 进程级别 PATH 修改（兜底，防止 SDK 不使用传入的 env）
-      process.env.PATH = `${builtinNodeDir}${path.delimiter}${originalPath || ''}`;
-      console.log(`[ClaudeService] 🔧 Prepended builtin Node to PATH: ${builtinNodeDir}`);
+      pathParts.push(builtinNodeDir);
+    }
+    if (builtinGitDir) {
+      pathParts.push(path.join(builtinGitDir, 'cmd'));        // git.exe
+      pathParts.push(path.join(builtinGitDir, 'usr', 'bin')); // unix tools
+      pathParts.push(path.join(builtinGitDir, 'bin'));        // bash.exe
     }
 
-    const envWithBuiltinNode = builtinNodeDir
-      ? {
-          ...process.env,
-          PATH: `${builtinNodeDir}${path.delimiter}${originalPath || ''}`,
-        }
-      : process.env;
+    // 进程级别 PATH 修改（兜底，防止 SDK 不使用传入的 env）
+    if (pathParts.length > 0) {
+      process.env.PATH = pathParts.join(path.delimiter) + (originalPath ? path.delimiter + originalPath : '');
+      console.log(`[ClaudeService] 🔧 Prepended builtin runtimes to PATH: ${pathParts.join(', ')}`);
+    }
+
+    // 构建 env（仅传给 Claude 子进程，不影响主进程）
+    const envWithBuiltinNode: NodeJS.ProcessEnv = {
+      ...process.env,
+    };
+
+    if (pathParts.length > 0) {
+      envWithBuiltinNode.PATH = pathParts.join(path.delimiter) + (originalPath ? path.delimiter + originalPath : '');
+    }
+
+    // 注入 CLAUDE_CODE_GIT_BASH_PATH（SDK 硬依赖）
+    if (builtinGitBashPath) {
+      envWithBuiltinNode.CLAUDE_CODE_GIT_BASH_PATH = builtinGitBashPath;
+      console.log(`[ClaudeService] 🔧 Set CLAUDE_CODE_GIT_BASH_PATH: ${builtinGitBashPath}`);
+    }
 
     const response = query({
       prompt: instruction,
