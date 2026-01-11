@@ -397,6 +397,24 @@ async function startProductionServer() {
       console.warn('[WARN] Failed to create user-templates directory:', err?.message || String(err));
     }
 
+    // Copy demo-config.json to settings directory if not exists
+    const demoConfigDest = path.join(writableSettingsDir, 'demo-config.json');
+    if (!fs.existsSync(demoConfigDest)) {
+      const demoConfigSources = [
+        path.join(standaloneDir, 'templates', 'demo-config.json'),
+        path.join(rootDir, 'templates', 'demo-config.json'),
+      ];
+      const demoConfigSource = demoConfigSources.find(p => fs.existsSync(p));
+      if (demoConfigSource) {
+        try {
+          fs.copyFileSync(demoConfigSource, demoConfigDest);
+          console.log('[INFO] Copied demo-config.json to settings directory');
+        } catch (err) {
+          console.warn('[WARN] Failed to copy demo-config.json:', err?.message || String(err));
+        }
+      }
+    }
+
     // Override env for child server process to use writable locations
     env.DATABASE_URL = `file:${writableDbPath}`;
     env.PROJECTS_DIR = writableProjectsDir;

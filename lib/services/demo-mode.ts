@@ -58,11 +58,29 @@ function getReplayDelay(speed: ReplaySpeed): { base: number; random: number } {
 
 /**
  * 加载演示配置
+ * - 生产环境（SETTINGS_DIR 已设置）：固定从用户设置目录读取
+ * - 开发环境：从 templates 目录读取
  */
 async function loadDemoConfig(): Promise<DemoConfig[]> {
   if (demoConfigCache) return demoConfigCache;
 
-  // 优先从 templates 目录读取
+  const settingsDir = process.env.SETTINGS_DIR;
+
+  // 生产环境：固定从用户设置目录读取
+  if (settingsDir) {
+    const configPath = path.join(settingsDir, 'demo-config.json');
+    try {
+      const content = await fs.readFile(configPath, 'utf-8');
+      demoConfigCache = JSON.parse(content);
+      console.log(`[DemoMode] Loaded config from ${configPath}`);
+      return demoConfigCache || [];
+    } catch {
+      console.log(`[DemoMode] Config not found at ${configPath}`);
+      return [];
+    }
+  }
+
+  // 开发环境：从 templates 目录读取
   const configPaths = [
     path.join(TEMPLATES_DIR_ABSOLUTE, 'demo-config.json'),
     path.join(process.cwd(), 'templates', 'demo-config.json'),
