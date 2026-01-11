@@ -313,6 +313,33 @@ async function startProductionServer() {
     NEXT_TELEMETRY_DISABLED: '1',
   };
 
+  // Windows: 注入内置 Git 环境变量（Claude SDK 依赖 git-bash）
+  if (process.platform === 'win32') {
+    const gitRuntimeDir = path.join(process.resourcesPath, 'git-runtime', 'win32-x64');
+    const gitBashPath = path.join(gitRuntimeDir, 'bin', 'bash.exe');
+
+    if (fs.existsSync(gitBashPath)) {
+      // 设置 CLAUDE_CODE_GIT_BASH_PATH（SDK 硬依赖）
+      env.CLAUDE_CODE_GIT_BASH_PATH = gitBashPath;
+
+      // 将 Git 相关目录添加到 PATH 前面
+      const gitPaths = [
+        path.join(gitRuntimeDir, 'cmd'),        // git.exe
+        path.join(gitRuntimeDir, 'usr', 'bin'), // unix tools
+        path.join(gitRuntimeDir, 'bin'),        // bash.exe
+      ].filter(p => fs.existsSync(p));
+
+      if (gitPaths.length > 0) {
+        const currentPath = env.PATH || process.env.PATH || '';
+        env.PATH = gitPaths.join(path.delimiter) + path.delimiter + currentPath;
+      }
+
+      console.log('[INFO] Injected builtin Git for Claude SDK:', gitBashPath);
+    } else {
+      console.warn('[WARN] Builtin Git not found at:', gitBashPath);
+    }
+  }
+
   // Resolve writable paths for production runtime
   try {
     const userDataDir = app.getPath('userData');
