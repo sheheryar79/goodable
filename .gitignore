@@ -83,6 +83,9 @@ python-runtime/
 # Node.js Runtime (too large for git)
 node-runtime/
 
+# Git Runtime (too large for git)
+git-runtime/
+
 # Windows special device files and debug outputs
 nul
 run*.txt

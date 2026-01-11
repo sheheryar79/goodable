@@ -299,6 +299,19 @@ foreach ($nulPath in $nulFiles) {
 
 Write-Success "Next.js build completed"
 
+# Clean duplicate runtime directories from standalone (handled by extraResources)
+$standaloneRuntimes = @(
+    ".next\standalone\git-runtime",
+    ".next\standalone\node-runtime"
+)
+foreach ($runtimeDir in $standaloneRuntimes) {
+    if (Test-Path $runtimeDir) {
+        Write-Info "Removing duplicate runtime from standalone: $runtimeDir"
+        Remove-Item -Recurse -Force $runtimeDir
+        Write-Success "Removed $runtimeDir"
+    }
+}
+
 # End of Prepare Phase (Steps 1-5)
 }
 

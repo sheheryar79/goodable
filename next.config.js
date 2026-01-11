@@ -8,13 +8,6 @@ const projectsDirAbsolute = path.isAbsolute(projectsDirRaw)
 const nextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname),
-  // 排除 runtime 目录，避免被 standalone 打包（由 electron-builder extraResources 处理）
-  outputFileTracingExcludes: {
-    '*': [
-      './git-runtime/**',
-      './node-runtime/**',
-    ],
-  },
   reactStrictMode: true,
   typescript: {
     ignoreBuildErrors: false,
