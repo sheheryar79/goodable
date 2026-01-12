@@ -10,32 +10,39 @@ interface RouteContext {
 /**
  * 获取项目的 plan 内容
  * 返回 { hasPlan, planContent, isApproved, requestId }
+ *
+ * 注意：只返回 ExitPlanMode 工具调用中的计划内容，
+ * 而非所有带 planning: true 的消息（那些可能只是询问阶段）
  */
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     const { project_id } = await params;
 
-    // 直接查询带 planning: true 的 assistant 消息
-    const planMessages = await db.select()
+    // 查询 ExitPlanMode 工具调用消息
+    const toolMessages = await db.select()
       .from(messages)
       .where(and(
         eq(messages.projectId, project_id),
-        eq(messages.role, 'assistant'),
-        eq(messages.messageType, 'chat')
+        eq(messages.role, 'tool'),
+        eq(messages.messageType, 'tool_use')
       ))
       .orderBy(desc(messages.createdAt));
 
-    // 找到最后一条带 planning: true 的消息
+    // 找到最后一条 ExitPlanMode 工具调用
     let planContent: string | null = null;
     let planRequestId: string | null = null;
-    for (const msg of planMessages) {
+    for (const msg of toolMessages) {
       if (msg.metadataJson) {
         try {
           const meta = JSON.parse(msg.metadataJson);
-          if (meta.planning === true) {
-            planContent = msg.content;
-            planRequestId = msg.requestId;
-            break;
+          const toolName = (meta.toolName ?? '').toString().toLowerCase();
+          if (toolName === 'exitplanmode') {
+            const planText = typeof meta.toolInput?.plan === 'string' ? meta.toolInput.plan.trim() : '';
+            if (planText.length > 0) {
+              planContent = planText;
+              planRequestId = msg.requestId;
+              break;
+            }
           }
         } catch {}
       }
