@@ -2542,7 +2542,7 @@ const persistProjectPreferences = useCallback(
           {/* Left: Chat window or Main Content */}
           <div
             style={{ width: currentView === 'chat' ? `${chatWidth}%` : '100%' }}
-            className="h-full border-r border-gray-200 flex flex-col min-w-0"
+            className="h-full border-r border-gray-200 flex flex-col min-w-0 flex-shrink-0 overflow-hidden"
           >
             {currentView === 'chat' && (
               <>
@@ -2842,16 +2842,19 @@ const persistProjectPreferences = useCallback(
           {/* Draggable divider */}
           {currentView === 'chat' && (
             <div
-              className="w-1 h-full bg-gray-200 hover:bg-blue-500 cursor-col-resize transition-colors relative group"
+              className="w-1 h-full bg-gray-200 hover:bg-blue-500 cursor-col-resize transition-colors relative group flex-shrink-0"
               onMouseDown={() => setIsDragging(true)}
             >
-              <div className="absolute inset-y-0 -left-1 -right-1" />
+              <div
+                className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize"
+                onMouseDown={() => setIsDragging(true)}
+              />
             </div>
           )}
 
           {/* Right: Preview/Code area - Only show in chat view */}
           {currentView === 'chat' && (
-            <div className="h-full flex flex-col bg-black min-w-0" style={{ width: `${100 - chatWidth}%` }}>
+            <div className="h-full flex flex-col bg-black min-w-0 flex-shrink-0 overflow-hidden" style={{ width: `${100 - chatWidth}%` }}>
             {/* Content area */}
             <div className="flex-1 min-h-0 flex flex-col">
               {/* Controls Bar */}
