@@ -1398,48 +1398,6 @@ export async function executeClaude(
     console.log(`[ClaudeService] 🤖 Querying Claude Agent SDK...`);
     console.log(`[ClaudeService] 📁 Working Directory: ${absoluteProjectPath}`);
     timelineLogger.logSDK(projectId, 'Query Claude Agent SDK', 'info', requestId, { cwd: absoluteProjectPath, model: resolvedModel }, 'sdk.start').catch(() => { });
-    const rewriteTmpPathString = (value: string): string => {
-      if (!value || typeof value !== 'string') return value;
-      // Replace any /tmp/tmp_<id>/... or /tmp/project/... occurrences with the project root
-      const withSlash = value.replace(/\/tmp\/(?:tmp_[^/]+|project)\//gi, `${absoluteProjectPath}/`);
-      // Handle trailing path token without slash, e.g. "... /tmp/project"
-      const withTrailing = withSlash.replace(/\/tmp\/(?:tmp_[^/]+|project)(?=$|\s|['"`])/gi, `${absoluteProjectPath}`);
-      return withTrailing;
-    };
-
-    const rewriteTmpPaths = (input: unknown): unknown => {
-      if (typeof input === 'string') {
-        return rewriteTmpPathString(input);
-      }
-      if (Array.isArray(input)) {
-        return input.map((v) => rewriteTmpPaths(v));
-      }
-      if (input && typeof input === 'object') {
-        const record = input as Record<string, unknown>;
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(record)) {
-          out[k] = rewriteTmpPaths(v);
-        }
-        return out;
-      }
-      return input;
-    };
-
-    const copyIfExistsFromTmp = async (tmpPath: string, destRel: string): Promise<void> => {
-      try {
-        const src = tmpPath;
-        const dest = path.join(absoluteProjectPath, destRel);
-        const destDir = path.dirname(dest);
-        await fs.mkdir(destDir, { recursive: true });
-        const stat = await fs.stat(src).catch(() => undefined);
-        if (stat && stat.isFile()) {
-          await fs.copyFile(src, dest);
-          try {
-            timelineLogger.logSDK(projectId, 'Copied file from tmp to project', 'info', requestId, { src, dest }, 'sdk.tmp_copy').catch(() => { });
-          } catch { }
-        }
-      } catch { }
-    };
 
     // 平台检测：Windows下使用简化权限模式
     const isWindows = process.platform === 'win32';
@@ -1448,12 +1406,12 @@ export async function executeClaude(
     // 动态生成 system prompt，包含当前项目路径信息
     const normalizedProjectPath = path.normalize(absoluteProjectPath);
 
-    // 统一使用 acceptEdits 避免打包环境 stdio 问题（Windows/macOS都存在）
-    const permissionMode = 'acceptEdits';
+    // 使用 bypassPermissions 完全放行所有工具（包括网络访问）
+    const permissionMode = 'bypassPermissions';
     console.log(`[ClaudeService] 🔐 Permission Mode: ${permissionMode}`);
 
-    // acceptEdits 模式强化提示词（所有平台统一）
-    const securityPrompt = permissionMode === 'acceptEdits' ? `
+    // bypassPermissions 模式下保留路径审计提示（仅用于AI理解）
+    const securityPrompt = `
 
 ⚠️ 【路径安全警告】
 - 当前环境路径检查已禁用
@@ -1463,7 +1421,7 @@ export async function executeClaude(
   2. 禁止使用 ../ 跳出项目目录
   3. 仅使用项目内相对路径（如 app/page.tsx）
 - 违规操作将被记录并可能导致项目暂停
-` : '';
+`;
 
     // 获取项目类型（必须存在）
     const projectType = (project as any).projectType as string | undefined;
@@ -1582,165 +1540,7 @@ ${basePrompt}`;
             },
           });
         },
-        // acceptEdits 模式：不使用 hooks（避免 stdio 通道问题）
-        // default 模式：保留 hooks 进行路径重写
-        ...(permissionMode === 'acceptEdits' ? {} : {
-          hooks: {
-            PreToolUse: [
-              {
-                matcher: '.*',
-                hooks: [
-                  async (hookInput: any) => {
-                    try {
-                      const original = hookInput?.tool_input;
-                      const updated = rewriteTmpPaths(original);
-                      if (JSON.stringify(original) !== JSON.stringify(updated)) {
-                        try {
-                          timelineLogger.logSDK(projectId, 'PreToolUse rewrite paths', 'info', requestId, { tool: hookInput?.tool_name, before: original, after: updated }, 'sdk.pretool_rewrite').catch(() => { });
-                        } catch { }
-                      }
-                      return {
-                        hookSpecificOutput: {
-                          hookEventName: 'PreToolUse',
-                          updatedInput: updated,
-                        },
-                      };
-                    } catch (e) {
-                      return {};
-                    }
-                  },
-                ],
-              },
-            ],
-            PostToolUse: [
-              {
-                matcher: '.*',
-                hooks: [
-                  async (hookInput: any) => {
-                    try {
-                      const input = hookInput?.tool_input;
-                      const collectTmpPairs = (node: unknown, acc: Array<{ tmp: string; rel: string }>, relHint?: string) => {
-                        if (typeof node === 'string') {
-                          const m = node.match(/^\/tmp\/(?:tmp_[^/]+|project)\/(.+)$/i);
-                          if (m && m[1]) acc.push({ tmp: node, rel: m[1] });
-                          return;
-                        }
-                        if (Array.isArray(node)) {
-                          node.forEach((v) => collectTmpPairs(v, acc, relHint));
-                          return;
-                        }
-                        if (node && typeof node === 'object') {
-                          const obj = node as Record<string, unknown>;
-                          for (const v of Object.values(obj)) collectTmpPairs(v, acc, relHint);
-                        }
-                      };
-                      const pairs: Array<{ tmp: string; rel: string }> = [];
-                      collectTmpPairs(input, pairs);
-                      for (const p of pairs) {
-                        await copyIfExistsFromTmp(p.tmp, p.rel);
-                      }
-                      if (pairs.length > 0) {
-                        try {
-                          timelineLogger.logSDK(projectId, 'PostToolUse tmp copies', 'info', requestId, { count: pairs.length }, 'sdk.posttool_copy').catch(() => { });
-                        } catch { }
-                      }
-                    } catch { }
-                    return {};
-                  },
-                ],
-              },
-            ],
-          },
-        }),
-        // acceptEdits 模式：不使用 canUseTool（避免 stdio 通道问题，改为事后审计）
-        // default 模式：保留 canUseTool 进行事前安全检查
-        ...(permissionMode === 'acceptEdits' ? {} : {
-          canUseTool: async (toolName: string, input: Record<string, unknown>, _opts: any) => {
-            const updated = rewriteTmpPaths(input) as Record<string, unknown>;
-            const changed = JSON.stringify(input) !== JSON.stringify(updated);
-            if (changed) {
-              try {
-                timelineLogger.logSDK(projectId, 'canUseTool rewrite paths', 'info', requestId, { tool: toolName }, 'sdk.canuse_rewrite').catch(() => { });
-              } catch { }
-            }
-
-            // 安全检查：文件操作必须在项目目录内
-            const fileOperationTools = ['Read', 'Write', 'Edit', 'Glob', 'NotebookEdit'];
-            if (fileOperationTools.includes(toolName)) {
-              const filePath = extractPathFromInput(updated);
-              if (filePath) {
-                // 将相对路径转换为绝对路径
-                let absolutePath: string;
-                if (path.isAbsolute(filePath)) {
-                  absolutePath = path.normalize(filePath);
-                } else {
-                  // 相对路径应该相对于项目目录解析
-                  absolutePath = path.normalize(path.resolve(absoluteProjectPath, filePath));
-                }
-
-                // 验证路径必须在项目目录内（处理跨平台路径分隔符）
-                const normalizedProjectPath = path.normalize(absoluteProjectPath) + path.sep;
-                const normalizedAbsolutePath = path.normalize(absolutePath) + path.sep;
-
-                const isInProject =
-                  normalizedAbsolutePath.startsWith(normalizedProjectPath) ||
-                  path.normalize(absolutePath) === path.normalize(absoluteProjectPath);
-
-                if (!isInProject) {
-                  const errorMessage = `❌ 安全限制：文件操作必须在项目目录内。
-
-项目目录：${absoluteProjectPath}
-你尝试访问：${filePath}
-解析后路径：${absolutePath}
-
-请使用相对路径（如 "app/page.tsx"）或项目目录内的绝对路径。`;
-
-                  try {
-                    timelineLogger.logSDK(projectId, 'canUseTool DENIED - path outside project', 'error', requestId, {
-                      tool: toolName,
-                      originalPath: filePath,
-                      resolvedPath: absolutePath,
-                      projectPath: absoluteProjectPath
-                    }, 'sdk.security_violation').catch(() => { });
-                  } catch { }
-
-                  return {
-                    behavior: 'deny',
-                    reason: errorMessage,
-                  } as any;
-                }
-
-                // 路径合法，更新input为绝对路径以确保SDK使用正确路径
-                const pathKeys = ['filePath', 'file_path', 'filepath', 'path', 'targetPath', 'target_path', 'notebook_path'];
-                const updatedWithAbsPath = { ...updated };
-                for (const key of pathKeys) {
-                  if (key in updatedWithAbsPath) {
-                    updatedWithAbsPath[key] = absolutePath;
-                    break;
-                  }
-                }
-
-                try {
-                  timelineLogger.logSDK(projectId, 'canUseTool path normalized', 'info', requestId, {
-                    tool: toolName,
-                    originalPath: filePath,
-                    normalizedPath: absolutePath
-                  }, 'sdk.path_normalized').catch(() => { });
-                } catch { }
-
-                return {
-                  behavior: 'allow',
-                  updatedInput: updatedWithAbsPath,
-                } as any;
-              }
-            }
-
-            return {
-              behavior: 'allow',
-              updatedInput: updated,
-            } as any;
-          },
-        }),
+        // bypassPermissions 模式：不使用 hooks 和 canUseTool（完全放行）
       } as any,
     });
 
@@ -2249,9 +2049,11 @@ ${basePrompt}`;
                 {
                   name,
                   metadata,
-                  ...(permissionMode === 'acceptEdits' && isFileOperation ? { noSafetyCheck: true } : {})
+                  // bypassPermissions 模式下所有文件操作均无安全检查
+                  ...(isFileOperation ? { noSafetyCheck: true, bypassMode: true } : {})
                 },
-                permissionMode === 'acceptEdits' && isFileOperation ? 'sdk.path_unsafe' : 'sdk.tool_use'
+                // 文件操作标记为 path_bypass，便于审计追溯
+                isFileOperation ? 'sdk.path_bypass' : 'sdk.tool_use'
               ).catch(() => { });
 
               // 检测TodoWrite工具并格式化展示
