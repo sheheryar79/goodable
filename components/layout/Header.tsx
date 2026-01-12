@@ -80,7 +80,7 @@ export default function Header() {
         onClose={() => setGlobalSettingsOpen(false)}
         projectId="global-settings"
         projectName="Global Settings"
-        initialTab="ai-assistant"
+        initialTab="environment"
       />
     </header>
   );

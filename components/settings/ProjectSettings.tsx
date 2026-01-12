@@ -3,13 +3,10 @@
  * Main settings modal with tabs
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Settings, Bot, Lock, Plug } from 'lucide-react';
+import { Settings, Lock } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { GeneralSettings } from './GeneralSettings';
-import { AIAssistantSettings } from './AIAssistantSettings';
 import { EnvironmentSettings } from './EnvironmentSettings';
-import { ServiceSettings } from './ServiceSettings';
-import GlobalSettings from './GlobalSettings';
 
 interface ProjectSettingsProps {
   isOpen: boolean;
@@ -21,7 +18,7 @@ interface ProjectSettingsProps {
   onProjectUpdated?: (update: { name: string; description?: string | null }) => void;
 }
 
-type SettingsTab = 'general' | 'ai-assistant' | 'environment' | 'services';
+type SettingsTab = 'general' | 'environment';
 
 export function ProjectSettings({
   isOpen,
@@ -39,24 +36,14 @@ export function ProjectSettings({
       [
         {
           id: 'general' as SettingsTab,
-          label: 'General',
+          label: '基本设置',
           icon: <span className="w-4 h-4 inline-flex"><Settings className="w-4 h-4" /></span>,
           hidden: !isProjectScoped,
         },
         {
-          id: 'ai-assistant' as SettingsTab,
-          label: 'Agent',
-          icon: <span className="w-4 h-4 inline-flex"><Bot className="w-4 h-4" /></span>,
-        },
-        {
           id: 'environment' as SettingsTab,
-          label: 'Envs',
+          label: '环境变量',
           icon: <span className="w-4 h-4 inline-flex"><Lock className="w-4 h-4" /></span>,
-        },
-        {
-          id: 'services' as SettingsTab,
-          label: 'Services',
-          icon: <span className="w-4 h-4 inline-flex"><Plug className="w-4 h-4" /></span>,
         },
       ].filter(tab => !('hidden' in tab) || !tab.hidden),
     [isProjectScoped]
@@ -67,7 +54,7 @@ export function ProjectSettings({
     if (initialTab && availableTabs.includes(initialTab)) {
       return initialTab;
     }
-    return tabs[0]?.id ?? 'ai-assistant';
+    return tabs[0]?.id ?? 'environment';
   }, [initialTab, tabs]);
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(resolvedInitialTab);
@@ -76,13 +63,11 @@ export function ProjectSettings({
     setActiveTab(resolvedInitialTab);
   }, [resolvedInitialTab]);
 
-  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
-
   const availableTabs = tabs.length ? tabs : [
     {
-      id: 'ai-assistant' as SettingsTab,
-      label: 'Agent',
-      icon: <span className="w-4 h-4 inline-flex"><Bot className="w-4 h-4" /></span>,
+      id: 'environment' as SettingsTab,
+      label: '环境变量',
+      icon: <span className="w-4 h-4 inline-flex"><Lock className="w-4 h-4" /></span>,
     },
   ];
 
@@ -100,23 +85,27 @@ export function ProjectSettings({
         <div className="flex h-full">
           {/* Sidebar Tabs */}
           <div className="w-56 bg-white border-r border-gray-200 ">
-          <nav className="p-4 space-y-1">
-            {availableTabs.map(tab => (
+          <nav className="p-4">
+            <div className="rounded-lg border border-gray-200 overflow-hidden">
+            {availableTabs.map((tab, index) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all duration-200 ${
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all duration-200 ${
+                  index > 0 ? 'border-t border-gray-200' : ''
+                } ${
                   activeTab === tab.id
-                    ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 shadow-sm border border-blue-200 '
-                    : 'hover:bg-gray-50 text-gray-600 hover:text-gray-900 '
+                    ? 'bg-gray-100 text-gray-900'
+                    : 'hover:bg-gray-50 text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <span className={activeTab === tab.id ? 'text-blue-600 ' : 'text-gray-500 '}>
+                <span className={activeTab === tab.id ? 'text-gray-700' : 'text-gray-400'}>
                   {tab.icon}
                 </span>
                 <span className="text-sm font-medium">{tab.label}</span>
               </button>
             ))}
+            </div>
           </nav>
         </div>
 
@@ -130,40 +119,13 @@ export function ProjectSettings({
               onProjectUpdated={onProjectUpdated}
             />
           )}
-          
-          {activeTab === 'ai-assistant' && (
-            <AIAssistantSettings projectId={projectId} />
-          )}
-          
+
           {activeTab === 'environment' && (
             <EnvironmentSettings projectId={projectId} />
-          )}
-          
-          {activeTab === 'services' && (
-            <ServiceSettings 
-              projectId={projectId} 
-              onOpenGlobalSettings={() => {
-                // Open Global Settings with services tab
-                setShowGlobalSettings(true);
-                onClose(); // Close current modal
-              }}
-            />
           )}
         </div>
       </div>
     </SettingsModal>
-    
-    {/* Global Settings Modal */}
-    {showGlobalSettings && (
-      <GlobalSettings 
-        isOpen={showGlobalSettings}
-        onClose={() => {
-          setShowGlobalSettings(false);
-          // Note: We could reopen ProjectSettings here if needed
-        }}
-        initialTab="services"
-      />
-    )}
     </>
   );
 }

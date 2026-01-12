@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import ChatLog from '@/components/chat/ChatLog';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
-import { AIAssistantSettings } from '@/components/settings/AIAssistantSettings';
 import { EnvironmentSettings } from '@/components/settings/EnvironmentSettings';
 import ChatInput from '@/components/chat/ChatInput';
 import { ChatErrorBoundary } from '@/components/ErrorBoundary';
@@ -275,7 +274,7 @@ export default function ChatPage() {
   const [showPublishPanel, setShowPublishPanel] = useState(false);
   const [deployChannel, setDeployChannel] = useState<'aliyun' | 'vercel'>('aliyun');
   const [publishLoading, setPublishLoading] = useState(false);
-  const [settingsActiveTab, setSettingsActiveTab] = useState<'general' | 'ai-assistant' | 'environment'>('general');
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'general' | 'environment'>('general');
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
   const [vercelConnected, setVercelConnected] = useState<boolean | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -3057,27 +3056,17 @@ const persistProjectPreferences = useCallback(
                           onClick={() => setSettingsActiveTab('general')}
                           className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                             settingsActiveTab === 'general'
-                              ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                              ? 'bg-gray-100 text-gray-900 border border-gray-300'
                               : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                           }`}
                         >
                           常规
                         </button>
                         <button
-                          onClick={() => setSettingsActiveTab('ai-assistant')}
-                          className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                            settingsActiveTab === 'ai-assistant'
-                              ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                              : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                          }`}
-                        >
-                          Agent
-                        </button>
-                        <button
                           onClick={() => setSettingsActiveTab('environment')}
                           className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                             settingsActiveTab === 'environment'
-                              ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                              ? 'bg-gray-100 text-gray-900 border border-gray-300'
                               : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                           }`}
                         >
@@ -3098,10 +3087,6 @@ const persistProjectPreferences = useCallback(
                             setProjectDescription(description ?? '');
                           }}
                         />
-                      )}
-
-                      {settingsActiveTab === 'ai-assistant' && (
-                        <AIAssistantSettings projectId={projectId} />
                       )}
 
                       {settingsActiveTab === 'environment' && (

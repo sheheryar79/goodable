@@ -27,6 +27,7 @@ export function GeneralSettings({
   const [originalName, setOriginalName] = useState(projectName);
   const [originalDescription, setOriginalDescription] = useState(projectDescription ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [status, setStatus] = useState<StatusMessage>(null);
   const [absolutePath, setAbsolutePath] = useState<string>('');
 
@@ -169,12 +170,12 @@ export function GeneralSettings({
         description: updatedDescription || null,
       });
 
-      setStatus({ type: 'success', text: 'Changes saved successfully.' });
+      setStatus({ type: 'success', text: '保存成功' });
     } catch (error) {
       const message =
         error instanceof Error && error.message
           ? error.message
-          : 'Something went wrong while saving changes.';
+          : '保存失败';
       setStatus({ type: 'error', text: message });
     } finally {
       setIsSaving(false);
@@ -186,19 +187,61 @@ export function GeneralSettings({
       ? '支持中文、英文、数字、空格、连字符、下划线，1-50字符'
       : null;
 
+  const handleExport = async () => {
+    if (!isProjectScoped || isExporting) return;
+    setIsExporting(true);
+    setStatus(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (normalizedName) params.set('name', normalizedName);
+      if (normalizedDescription) params.set('description', normalizedDescription);
+
+      const response = await fetch(
+        `${API_BASE}/api/projects/${projectId}/export?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Export failed');
+      }
+
+      // Download the zip file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${normalizedName || projectId}-template.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      setStatus({ type: 'success', text: '模板导出成功' });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : '导出失败';
+      setStatus({ type: 'error', text: message });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">General Settings</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">基本设置</h3>
 
         {!isProjectScoped ? (
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            Select a project to edit its general settings.
+            请选择一个项目以编辑设置
           </div>
         ) : (
           <div className="space-y-5">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Project Name</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">项目名称</label>
               <input
                 type="text"
                 value={name}
@@ -206,8 +249,8 @@ export function GeneralSettings({
                   setName(event.target.value);
                   if (status?.type) setStatus(null);
                 }}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter project name"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                placeholder="输入项目名称"
               />
               {nameError && (
                 <p className="mt-2 text-sm text-red-600">
@@ -217,7 +260,7 @@ export function GeneralSettings({
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Project ID</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">项目 ID</label>
               <input
                 type="text"
                 value={projectId}
@@ -227,7 +270,7 @@ export function GeneralSettings({
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Project Path</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">项目路径</label>
               <div className="relative">
                 <input
                   type="text"
@@ -242,24 +285,24 @@ export function GeneralSettings({
                       const ok = await copyTextSafe(absolutePath);
                       setStatus(
                         ok
-                          ? { type: 'success', text: 'Path copied to clipboard!' }
-                          : { type: 'error', text: 'Failed to copy path to clipboard.' }
+                          ? { type: 'success', text: '路径已复制' }
+                          : { type: 'error', text: '复制失败' }
                       );
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
-                    title="Copy path to clipboard"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                    title="复制路径"
                   >
-                    Copy
+                    复制
                   </button>
                 )}
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                All file operations will be restricted to this directory
+                所有文件操作将限制在此目录内
               </p>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Description</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">项目描述</label>
               <textarea
                 value={description}
                 onChange={event => {
@@ -267,8 +310,8 @@ export function GeneralSettings({
                   if (status?.type) setStatus(null);
                 }}
                 rows={4}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Describe your project..."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                placeholder="描述你的项目..."
               />
             </div>
 
@@ -284,13 +327,20 @@ export function GeneralSettings({
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleExport}
+                disabled={!isProjectScoped || isExporting}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isExporting ? '导出中...' : '导出为模板'}
+              </button>
               <button
                 onClick={handleSave}
                 disabled={isSaveDisabled}
-                className="rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-gray-300 bg-gray-900 px-4 py-2 text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isSaving ? 'Saving...' : 'Save Changes'}
+                {isSaving ? '保存中...' : '保存'}
               </button>
             </div>
           </div>

@@ -8,6 +8,7 @@ import AdmZip from 'adm-zip';
 import { TEMPLATES_DIR_ABSOLUTE, USER_TEMPLATES_DIR_ABSOLUTE, PROJECTS_DIR_ABSOLUTE } from '@/lib/config/paths';
 import { db } from '@/lib/db/client';
 import { projects, messages } from '@/lib/db/schema';
+import { eq, asc } from 'drizzle-orm';
 import { generateId } from '@/lib/utils/id';
 
 /**
@@ -349,6 +350,203 @@ export function invalidateTemplatesCache(): void {
   templatesCache = null;
   lastScanTime = 0;
   console.log('[TemplateService] Cache invalidated');
+}
+
+/**
+ * Files and directories to exclude when exporting project as template
+ */
+const EXPORT_EXCLUDE_PATTERNS = {
+  // Common excludes
+  common: [
+    '.env',
+    '.env.local',
+    '.env.*.local',
+    '.git',
+    '*.db',
+    '*.sqlite',
+    '*.sqlite3',
+    '*.db-journal',
+  ],
+  // Next.js specific
+  nextjs: [
+    'node_modules',
+    '.next',
+    '.turbo',
+    '.pnpm-store',
+    'out',
+  ],
+  // Python specific
+  'python-fastapi': [
+    '.venv',
+    'venv',
+    '__pycache__',
+    '*.pyc',
+    '*.pyo',
+    '*.pyd',
+    '.pytest_cache',
+    '*.egg-info',
+  ],
+};
+
+/**
+ * Check if a file/directory should be excluded from export
+ */
+function shouldExclude(name: string, projectType: 'nextjs' | 'python-fastapi'): boolean {
+  const patterns = [
+    ...EXPORT_EXCLUDE_PATTERNS.common,
+    ...EXPORT_EXCLUDE_PATTERNS[projectType],
+  ];
+
+  for (const pattern of patterns) {
+    // Exact match
+    if (pattern === name) return true;
+    // Glob pattern match (simple * wildcard)
+    if (pattern.includes('*')) {
+      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+      if (regex.test(name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Recursively add directory contents to zip, excluding specified patterns
+ */
+async function addDirectoryToZip(
+  zip: AdmZip,
+  dirPath: string,
+  zipPath: string,
+  projectType: 'nextjs' | 'python-fastapi'
+): Promise<void> {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (shouldExclude(entry.name, projectType)) {
+      console.log(`[TemplateService] Excluding: ${entry.name}`);
+      continue;
+    }
+
+    const fullPath = path.join(dirPath, entry.name);
+    const entryZipPath = zipPath ? `${zipPath}/${entry.name}` : entry.name;
+
+    if (entry.isDirectory()) {
+      await addDirectoryToZip(zip, fullPath, entryZipPath, projectType);
+    } else if (entry.isFile()) {
+      const content = await fs.readFile(fullPath);
+      zip.addFile(entryZipPath, content);
+    }
+  }
+}
+
+/**
+ * Generate template ID from project name (slugify)
+ */
+function generateTemplateId(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^\w\u4e00-\u9fa5-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    || `template-${Date.now()}`;
+}
+
+/**
+ * Export project as template zip
+ */
+export async function exportProjectAsTemplate(
+  projectId: string,
+  options?: {
+    templateId?: string;
+    name?: string;
+    description?: string;
+    author?: string;
+    version?: string;
+  }
+): Promise<Buffer> {
+  // Get project from database
+  const project = await db.query.projects.findFirst({
+    where: (p, { eq }) => eq(p.id, projectId),
+  });
+
+  if (!project) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+
+  if (!project.repoPath) {
+    throw new Error(`Project has no repo path: ${projectId}`);
+  }
+
+  // Check if project directory exists
+  const dirExists = await fs.access(project.repoPath).then(() => true).catch(() => false);
+  if (!dirExists) {
+    throw new Error(`Project directory not found: ${project.repoPath}`);
+  }
+
+  const projectType = (project.projectType || 'nextjs') as 'nextjs' | 'python-fastapi';
+  const templateId = options?.templateId || generateTemplateId(project.name);
+  const templateName = options?.name || project.name;
+  const templateDescription = options?.description || project.description || '';
+
+  // Create template metadata
+  const metadata: TemplateMetadata = {
+    id: templateId,
+    name: templateName,
+    description: templateDescription,
+    projectType,
+    version: options?.version || '1.0.0',
+    author: options?.author || '',
+    createdAt: new Date().toISOString().split('T')[0],
+  };
+
+  // Create zip
+  const zip = new AdmZip();
+
+  // Add template.json
+  zip.addFile('template.json', Buffer.from(JSON.stringify(metadata, null, 2), 'utf-8'));
+
+  // Export messages as mock.json for replay
+  const projectMessages = await db.select()
+    .from(messages)
+    .where(eq(messages.projectId, projectId))
+    .orderBy(asc(messages.createdAt));
+
+  if (projectMessages.length > 0) {
+    const mockMessages = projectMessages.map(msg => {
+      const result: {
+        role: string;
+        messageType: string;
+        content: string;
+        metadata?: Record<string, unknown>;
+      } = {
+        role: msg.role,
+        messageType: msg.messageType,
+        content: msg.content,
+      };
+
+      // Parse and include metadata if exists
+      if (msg.metadataJson) {
+        try {
+          result.metadata = JSON.parse(msg.metadataJson);
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      return result;
+    });
+
+    const mockData = { messages: mockMessages };
+    zip.addFile('mock.json', Buffer.from(JSON.stringify(mockData, null, 2), 'utf-8'));
+    console.log(`[TemplateService] Added mock.json with ${mockMessages.length} messages`);
+  }
+
+  // Add project files under project/ directory
+  await addDirectoryToZip(zip, project.repoPath, 'project', projectType);
+
+  console.log(`[TemplateService] ✅ Exported project ${projectId} as template ${templateId}`);
+
+  return zip.toBuffer();
 }
 
 /**
