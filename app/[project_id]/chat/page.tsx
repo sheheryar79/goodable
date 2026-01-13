@@ -305,6 +305,7 @@ export default function ChatPage() {
   const [agentWorkComplete, setAgentWorkComplete] = useState<boolean>(false);
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>('initializing');
   const [projectMode, setProjectMode] = useState<'code' | 'work'>('code'); // 项目模式
+  const [workDirectory, setWorkDirectory] = useState<string>(''); // work 模式的工作目录
   const [initializationMessage, setInitializationMessage] = useState('Starting project initialization...');
   const [initialPromptSent, setInitialPromptSent] = useState(false);
   const initialPromptSentRef = useRef(false);
@@ -1638,7 +1639,18 @@ const persistProjectPreferences = useCallback(
       const followGlobal = !rawPreferredCli && !rawSelectedModel;
       setUsingGlobalDefaults(followGlobal);
       setProjectDescription(project.description || '');
-      setProjectMode(project.mode || 'code'); // 设置项目模式
+      const mode = project.mode || 'code';
+      setProjectMode(mode); // 设置项目模式
+      setWorkDirectory(project.work_directory || ''); // 设置工作目录
+
+      // work 模式默认显示文件标签和图标视图
+      if (mode === 'work') {
+        setShowPreview(false);
+        setShowConsole(false);
+        setShowSettings(false);
+        setShowAliyunDeploy(false);
+        setFileViewMode('grid'); // 默认图标模式
+      }
 
       if (project.initial_prompt) {
         setHasInitialPrompt(true);
@@ -1707,6 +1719,13 @@ const persistProjectPreferences = useCallback(
       updateSelectedModel(modelParam, sanitizedCli);
     }
   }, [searchParams, preferredCli, updatePreferredCli, updateSelectedModel, setUsingGlobalDefaults]);
+
+  // Work 模式下自动加载文件树
+  useEffect(() => {
+    if (projectMode === 'work' && fileViewMode === 'grid' && (!tree || tree.length === 0)) {
+      loadTree('.');
+    }
+  }, [projectMode, fileViewMode, tree, loadTree]);
 
   const loadSettingsRef = useRef(loadSettings);
   useEffect(() => {
@@ -3528,12 +3547,17 @@ const persistProjectPreferences = useCallback(
                 className="h-full flex bg-white "
               >
                 {/* Left Sidebar - File Explorer (VS Code style) */}
-                <div className="w-64 flex-shrink-0 bg-gray-50 border-r border-gray-200 flex flex-col">
+                <div className={`${fileViewMode === 'grid' ? 'flex-1' : 'w-64 flex-shrink-0'} bg-gray-50 border-r border-gray-200 flex flex-col`}>
                   {/* File Tree Header */}
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-100 border-b border-gray-200">
-                    <div className="flex items-center gap-2">
-                      <Code className="text-gray-600" size={14} />
-                      <span className="text-sm font-medium text-gray-700">文件</span>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Code className="text-gray-600 flex-shrink-0" size={14} />
+                      <span className="text-sm font-medium text-gray-700 flex-shrink-0">文件</span>
+                      {projectMode === 'work' && workDirectory && (
+                        <span className="text-xs text-gray-500 truncate" title={workDirectory}>
+                          {workDirectory.length > 50 ? `...${workDirectory.slice(-47)}` : workDirectory}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <button
@@ -3590,8 +3614,9 @@ const persistProjectPreferences = useCallback(
                   </div>
                 </div>
 
-                {/* Right Editor Area */}
-                <div className="flex-1 flex flex-col bg-white min-w-0">
+                {/* Right Editor Area - Only show in list mode */}
+                {fileViewMode === 'list' && (
+                  <div className="flex-1 flex flex-col bg-white min-w-0">
                   {selectedFile ? (
                     <>
                       {/* File Tab */}
@@ -3730,6 +3755,7 @@ const persistProjectPreferences = useCallback(
                     </div>
                   )}
                 </div>
+                )}
               </MotionDiv>
                 )}
                 </AnimatePresence>

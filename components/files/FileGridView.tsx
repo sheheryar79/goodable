@@ -96,17 +96,17 @@ export default function FileGridView({ files, onFileClick, onFolderClick }: File
   };
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 p-4">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-4">
       {files.map((item, index) => (
         <div
           key={index}
           onClick={() => handleClick(item)}
-          className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors min-w-[80px]"
+          className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
         >
           <div className="mb-1.5 flex-shrink-0">
             {getFileIcon(item)}
           </div>
-          <div className="text-xs text-center text-gray-700 w-full px-0.5 leading-tight break-words line-clamp-2" title={item.name}>
+          <div className="text-xs text-center text-gray-700 w-full leading-tight break-words line-clamp-2" title={item.name}>
             {truncateFileName(item.name)}
           </div>
           {item.size !== undefined && item.type === 'file' && (
