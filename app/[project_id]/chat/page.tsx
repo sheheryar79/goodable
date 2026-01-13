@@ -2861,7 +2861,7 @@ const persistProjectPreferences = useCallback(
 
           {/* Right: Preview/Code area - Only show in chat view */}
           {currentView === 'chat' && (
-            <div className="h-full flex flex-col bg-black min-w-0 flex-shrink-0 overflow-hidden" style={{ width: '65%' }}>
+            <div className="h-full flex flex-col bg-gray-50 min-w-0 flex-shrink-0 overflow-hidden" style={{ width: '65%' }}>
             {/* Content area */}
             <div className="flex-1 min-h-0 flex flex-col">
               {/* Controls Bar */}
@@ -3081,7 +3081,7 @@ const persistProjectPreferences = useCallback(
               </div>
 
               {/* Content Area */}
-              <div className="flex-1 relative bg-black overflow-hidden">
+              <div className="flex-1 relative bg-gray-50 overflow-hidden">
                 <AnimatePresence initial={false}>
                   {showAliyunDeploy ? (
                   <MotionDiv
@@ -3160,19 +3160,19 @@ const persistProjectPreferences = useCallback(
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="h-full flex flex-col bg-black"
+                    className="h-full flex flex-col bg-gray-50"
                   >
                     {/* Console Header */}
-                    <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-700">
+                    <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200">
                       <div className="flex items-center gap-2">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-green-400" strokeWidth="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-green-600" strokeWidth="2">
                           <polyline points="4 17 10 11 4 5"></polyline>
                           <line x1="12" y1="19" x2="20" y2="19"></line>
                         </svg>
-                        <span className="text-sm font-medium text-gray-300">Console Output</span>
+                        <span className="text-sm font-medium text-gray-700">Console Output</span>
                         {/* Real-time connection indicator */}
                         <div className="flex items-center gap-1.5 ml-2">
-                          <div className={`w-2 h-2 rounded-full ${isTimelineSseConnected ? 'bg-green-400 animate-pulse' : 'bg-gray-600'}`} />
+                          <div className={`w-2 h-2 rounded-full ${isTimelineSseConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
                           <span className="text-xs text-gray-500">
                             {isTimelineSseConnected ? 'Live' : 'Offline'}
                           </span>
@@ -3181,7 +3181,7 @@ const persistProjectPreferences = useCallback(
                       <button
                         onClick={loadTimelineContent}
                         disabled={isLoadingTimeline}
-                        className="px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors disabled:opacity-50"
+                        className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
                         title="Manual refresh (backup)"
                       >
                         {isLoadingTimeline ? 'Loading...' : 'Refresh'}
@@ -3189,16 +3189,16 @@ const persistProjectPreferences = useCallback(
                     </div>
 
                     {/* Console Content */}
-                    <div className="flex-1 overflow-y-auto bg-black p-4 font-mono text-sm custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto bg-gray-50 p-4 font-mono text-sm custom-scrollbar">
                       {!timelineContent ? (
-                        <div className="flex items-center justify-center h-full text-gray-600">
+                        <div className="flex items-center justify-center h-full text-gray-500">
                           <div className="text-center">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="mx-auto mb-3 text-gray-700" strokeWidth="1.5">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="mx-auto mb-3 text-gray-400" strokeWidth="1.5">
                               <polyline points="4 17 10 11 4 5"></polyline>
                               <line x1="12" y1="19" x2="20" y2="19"></line>
                             </svg>
                             <p className="text-sm">No console output yet</p>
-                            <p className="text-xs text-gray-700 mt-1">Build and preview logs will appear here</p>
+                            <p className="text-xs text-gray-400 mt-1">Build and preview logs will appear here</p>
                           </div>
                         </div>
                       ) : (
@@ -3208,10 +3208,10 @@ const persistProjectPreferences = useCallback(
                               key={idx}
                               className={`leading-relaxed ${
                                 line.includes('error') || line.includes('ERROR')
-                                  ? 'text-red-400'
+                                  ? 'text-red-600'
                                   : line.includes('warn') || line.includes('WARN')
-                                  ? 'text-yellow-400'
-                                  : 'text-green-400'
+                                  ? 'text-yellow-600'
+                                  : 'text-green-600'
                               }`}
                             >
                               {line}
