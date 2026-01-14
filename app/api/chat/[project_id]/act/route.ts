@@ -449,7 +449,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       });
     } else {
       const executor =
-        isInitialPrompt
+        isInitialPrompt && projectMode !== 'work'  // work 模式不调用项目初始化函数
           ? (cliPreference === 'codex'
               ? initializeCodexProject
               : cliPreference === 'cursor'
