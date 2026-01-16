@@ -111,7 +111,7 @@
       {
         "from": ".next/standalone",
         "to": "standalone",
-        "filter": ["**/*", "!public/**"]
+        "filter": ["**/*", "!public/**", "!node-runtime/**", "!.git/**"]
       },
       {
         "from": ".next/static",
@@ -131,11 +131,6 @@
       {
         "from": "lib/db/migrations",
         "to": "migrations"
-      },
-      {
-        "from": "templates/goodqunbot/project/wxauto_lib",
-        "to": "templates/goodqunbot/project/wxauto_lib",
-        "filter": ["**/*"]
       }
     ],
     "afterSign": "tools/macos-signing/afterSign.js",
