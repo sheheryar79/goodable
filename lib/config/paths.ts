@@ -146,6 +146,7 @@ export const USER_TEMPLATES_DIR_ABSOLUTE = getUserTemplatesDirectory();
 
 /**
  * Get builtin Python runtime path
+ * Priority: GOODABLE_RESOURCES_PATH (standalone) > resourcesPath (Electron) > cwd (dev)
  */
 export function getBuiltinPythonPath(): string | null {
   try {
@@ -167,25 +168,34 @@ export function getBuiltinPythonPath(): string | null {
     // Determine Python executable name
     const pythonBin = platform === 'win32' ? 'python.exe' : 'python3';
 
-    // Build path to builtin Python
-    // In packaged Electron app, use process.resourcesPath
-    // In development (Next.js), use process.cwd()
+    // Priority 1: GOODABLE_RESOURCES_PATH (passed from Electron main to standalone subprocess)
+    const resourcesPath = process.env.GOODABLE_RESOURCES_PATH;
+    if (resourcesPath) {
+      const pythonPath = path.join(resourcesPath, 'python-runtime', platformDir, 'bin', pythonBin);
+      if (fs.existsSync(pythonPath)) {
+        console.log(`[PathConfig] ✅ Found builtin Python via GOODABLE_RESOURCES_PATH: ${pythonPath}`);
+        return pythonPath;
+      }
+    }
+
+    // Priority 2: process.resourcesPath (Electron main/renderer process)
     const electronResourcesPath = (process as any).resourcesPath as string | undefined;
-    const appRoot =
-      electronResourcesPath && fs.existsSync(electronResourcesPath)
-        ? electronResourcesPath
-        : process.cwd();
+    if (electronResourcesPath && fs.existsSync(electronResourcesPath)) {
+      const pythonPath = path.join(electronResourcesPath, 'python-runtime', platformDir, 'bin', pythonBin);
+      if (fs.existsSync(pythonPath)) {
+        console.log(`[PathConfig] ✅ Found builtin Python via resourcesPath: ${pythonPath}`);
+        return pythonPath;
+      }
+    }
 
-    const runtimeDir = path.join(appRoot, 'python-runtime', platformDir);
-    const pythonPath = path.join(runtimeDir, 'bin', pythonBin);
-
-    // Check if exists
+    // Priority 3: process.cwd() (development environment)
+    const pythonPath = path.join(process.cwd(), 'python-runtime', platformDir, 'bin', pythonBin);
     if (fs.existsSync(pythonPath)) {
-      console.log(`[PathConfig] ✅ Found builtin Python: ${pythonPath}`);
+      console.log(`[PathConfig] ✅ Found builtin Python via cwd: ${pythonPath}`);
       return pythonPath;
     }
 
-    console.log(`[PathConfig] ⚠️ Builtin Python not found at: ${pythonPath}`);
+    console.log(`[PathConfig] ⚠️ Builtin Python not found in any location`);
     return null;
   } catch (error) {
     console.error('[PathConfig] ❌ Error detecting builtin Python:', error);
