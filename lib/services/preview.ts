@@ -1267,6 +1267,7 @@ export interface PreviewInfo {
   status: PreviewStatus;
   logs: string[];
   pid?: number;
+  instanceId?: number;
 }
 
 class PreviewManager {
@@ -2467,7 +2468,7 @@ async function resolvePort(preferredPort) {
           status: 'preview_ready',
           message: `Preview is ready at ${previewProcess.url}`,
           phase: 'ready',
-          metadata: { url: previewProcess.url, port: previewProcess.port },
+          metadata: { url: previewProcess.url, port: previewProcess.port, instanceId: previewProcess.startedAt.getTime() },
         },
       });
       timelineLogger.logPreview(projectId, `Preview is ready at ${previewProcess.url}`, 'info', taskId, { url: previewProcess.url, port: previewProcess.port, phase: 'ready' }, 'preview.ready').catch(() => {});
@@ -2631,6 +2632,7 @@ async function resolvePort(preferredPort) {
       status: processInfo.status,
       logs: [...processInfo.logs],
       pid: processInfo.process?.pid,
+      instanceId: processInfo.startedAt.getTime(),
     };
   }
 
@@ -2948,7 +2950,7 @@ async function resolvePort(preferredPort) {
         data: {
           status: 'preview_ready',
           message: `Preview is ready at ${url}/docs`,
-          metadata: { url: `${url}/docs`, port },
+          metadata: { url: `${url}/docs`, port, instanceId: previewProcess.startedAt.getTime() },
         },
       });
 

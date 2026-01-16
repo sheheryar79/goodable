@@ -989,7 +989,7 @@ interface ChatLogProps {
     add: (message: ChatMessage) => void;
     remove: (messageId: string) => void;
   }) => void;
-  onPreviewReady?: (url: string) => void;
+  onPreviewReady?: (url: string, instanceId?: number) => void;
   onPreviewError?: (message: string) => void;
   onPreviewPhaseChange?: (phase: string) => void;
   onFocusInput?: () => void;
@@ -1799,7 +1799,8 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
           handleRealtimeStatus('preview_ready', data, data?.requestId);
           try {
             const url = typeof (data as any)?.metadata?.url === 'string' ? (data as any).metadata.url : undefined;
-            if (url) onPreviewReady?.(url);
+            const instanceId = typeof (data as any)?.metadata?.instanceId === 'number' ? (data as any).metadata.instanceId : undefined;
+            if (url) onPreviewReady?.(url, instanceId);
           } catch {}
           break;
         }

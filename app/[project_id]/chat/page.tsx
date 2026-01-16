@@ -242,6 +242,8 @@ export default function ChatPage() {
   const [projectDescription, setProjectDescription] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const [previewInstanceId, setPreviewInstanceId] = useState<number | null>(null);
+  const lastPreviewInstanceIdRef = useRef<number | null>(null);
   const [backendPreviewPhase, setBackendPreviewPhase] = useState<string>('stopped');
   const previewOrigin = useMemo(() => {
     if (!previewUrl) return '';
@@ -392,6 +394,23 @@ export default function ChatPage() {
   useEffect(() => {
     previewUrlRef.current = previewUrl;
   }, [previewUrl]);
+
+  // Unified handler for preview ready events (idempotent by instanceId)
+  const handlePreviewReady = useCallback((url: string | null, instanceId?: number) => {
+    // Idempotent check: skip if same instanceId
+    if (instanceId !== undefined && instanceId === lastPreviewInstanceIdRef.current) {
+      return;
+    }
+    if (instanceId !== undefined) {
+      lastPreviewInstanceIdRef.current = instanceId;
+      setPreviewInstanceId(instanceId);
+    }
+    setPreviewUrl(url);
+    if (url) {
+      setCurrentRoute('/');
+      setPreviewError(null);
+    }
+  }, []);
 
   const sendInitialPrompt = useCallback(async (initialPrompt: string) => {
     if (initialPromptSent) {
@@ -861,10 +880,11 @@ const persistProjectPreferences = useCallback(
       const data = payload?.data ?? payload ?? {};
 
       setPreviewInitializationMessage('Preview ready');
-      setPreviewUrl(typeof data.url === 'string' ? data.url : null);
+      const url = typeof data.url === 'string' ? data.url : null;
+      const instanceId = typeof data.instanceId === 'number' ? data.instanceId : undefined;
+      handlePreviewReady(url, instanceId);
       // 不要在这里设置 setIsStartingPreview(false)，让 SSE 事件控制状态
-      setCurrentRoute('/');
-      try { await fetch(`${API_BASE}/api/projects/${projectId}/log/frontend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'preview.ready', message: 'Preview ready', level: 'info', metadata: { url: typeof data.url === 'string' ? data.url : null } }) }); } catch {}
+      try { await fetch(`${API_BASE}/api/projects/${projectId}/log/frontend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'preview.ready', message: 'Preview ready', level: 'info', metadata: { url, instanceId } }) }); } catch {}
       // Health check moved to backend or skipped to avoid跨域
     } catch (error) {
       console.error('Error starting preview:', error);
@@ -872,7 +892,7 @@ const persistProjectPreferences = useCallback(
       setIsStartingPreview(false);
       try { await fetch(`${API_BASE}/api/projects/${projectId}/log/frontend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'preview.start.exception', message: String(error instanceof Error ? error.message : error), level: 'error' }) }); } catch {}
     }
-  }, [projectId]);
+  }, [projectId, handlePreviewReady]);
 
   // Navigate to specific route in iframe
   const navigateToRoute = (route: string) => {
@@ -2400,16 +2420,15 @@ const persistProjectPreferences = useCallback(
         const data = payload?.data ?? payload ?? {};
         const status = typeof data?.status === 'string' ? data.status : undefined;
         const url = typeof data?.url === 'string' ? data.url : null;
-        try { console.log('[PreviewStatus.HTTP]', { status, url, data }); } catch {}
+        const instanceId = typeof data?.instanceId === 'number' ? data.instanceId : undefined;
+        try { console.log('[PreviewStatus.HTTP]', { status, url, instanceId, data }); } catch {}
         if (status) {
           setBackendPreviewPhase(status);
         }
         if (canceled) return;
         if (url) {
-          setPreviewUrl(url);
-          setCurrentRoute('/');
+          handlePreviewReady(url, instanceId);
           // 不要在轮询中设置 setIsStartingPreview(false)，让 SSE 事件控制
-          setPreviewError(null);
         } else {
           // 不要在轮询中设置 setIsStartingPreview(false)，让 SSE 事件控制
           if (status === 'error') {
@@ -2422,7 +2441,7 @@ const persistProjectPreferences = useCallback(
     return () => {
       canceled = true;
     };
-  }, [projectId]);
+  }, [projectId, handlePreviewReady]);
 
   // Cleanup pending requests on unmount
   useEffect(() => {
@@ -2627,10 +2646,9 @@ const persistProjectPreferences = useCallback(
                   setIsSseFallbackActive(active);
                 }}
                 onProjectStatusUpdate={handleProjectStatusUpdate}
-                onPreviewReady={(url) => {
-                  setPreviewUrl(url);
-                  setCurrentRoute('/');
-                  try { fetch(`${API_BASE}/api/projects/${projectId}/log/frontend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'preview.ready.auto_switch', message: 'Auto switch to preview URL', level: 'info', metadata: { url } }) }); } catch {}
+                onPreviewReady={(url, instanceId) => {
+                  handlePreviewReady(url, instanceId);
+                  try { fetch(`${API_BASE}/api/projects/${projectId}/log/frontend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'preview.ready.auto_switch', message: 'Auto switch to preview URL', level: 'info', metadata: { url, instanceId } }) }); } catch {}
                 }}
                 onPreviewError={(message) => {
                   const msg = typeof message === 'string' && message.trim().length > 0 ? message : '预览启动失败';
@@ -3262,7 +3280,7 @@ const persistProjectPreferences = useCallback(
                         </div>
                       )}
                       <iframe
-                        key={previewUrl || 'empty'}
+                        key={`${previewUrl || 'empty'}-${previewInstanceId ?? 0}`}
                         ref={iframeRef}
                         className="w-full h-full border-none bg-white "
                         src={previewUrl || ''}
