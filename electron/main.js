@@ -331,6 +331,22 @@ async function startProductionServer() {
       console.warn('[WARN] Failed to create user-templates directory:', err?.message || String(err));
     }
 
+    // User skills directory (for imported skills)
+    const writableUserSkillsDir = path.join(userDataDir, 'user-skills');
+    try {
+      fs.mkdirSync(writableUserSkillsDir, { recursive: true });
+    } catch (err) {
+      console.warn('[WARN] Failed to create user-skills directory:', err?.message || String(err));
+    }
+
+    // User employees directory (for user-created employees)
+    const writableUserEmployeesDir = path.join(userDataDir, 'employees');
+    try {
+      fs.mkdirSync(writableUserEmployeesDir, { recursive: true });
+    } catch (err) {
+      console.warn('[WARN] Failed to create employees directory:', err?.message || String(err));
+    }
+
     // Copy demo-config.json to settings directory if not exists
     const demoConfigDest = path.join(writableSettingsDir, 'demo-config.json');
     if (!fs.existsSync(demoConfigDest)) {
@@ -354,11 +370,15 @@ async function startProductionServer() {
     env.PROJECTS_DIR = writableProjectsDir;
     env.SETTINGS_DIR = writableSettingsDir;
     env.USER_TEMPLATES_DIR = writableUserTemplatesDir;
+    env.USER_SKILLS_DIR = writableUserSkillsDir;
+    env.USER_EMPLOYEES_DIR = writableUserEmployeesDir;
     console.log('[INFO] Runtime paths configured:', {
       DATABASE_URL: env.DATABASE_URL,
       PROJECTS_DIR: env.PROJECTS_DIR,
       SETTINGS_DIR: env.SETTINGS_DIR,
       USER_TEMPLATES_DIR: env.USER_TEMPLATES_DIR,
+      USER_SKILLS_DIR: env.USER_SKILLS_DIR,
+      USER_EMPLOYEES_DIR: env.USER_EMPLOYEES_DIR,
     });
   } catch (err) {
     console.warn('[WARN] Failed to configure writable runtime paths:', err?.message || String(err));

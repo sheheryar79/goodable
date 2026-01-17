@@ -1,32 +1,24 @@
 /**
  * Employee Service - Manage digital employees
+ *
+ * Architecture:
+ * - Builtin employees: read-only, shipped with app (builtin/employees.json)
+ * - User employees: read-write, stored in user data directory
  */
 
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
+import {
+  BUILTIN_EMPLOYEES_PATH,
+  getUserEmployeesPath,
+} from '@/lib/config/paths';
 import type {
   Employee,
   CreateEmployeeInput,
   UpdateEmployeeInput,
   EmployeeCategoryConfig,
 } from '@/types/backend/employee';
-
-/**
- * Get employees data file path
- */
-function getEmployeesFilePath(): string {
-  // Priority 1: Environment variable
-  const envPath = process.env.EMPLOYEES_DATA_PATH;
-  if (envPath && envPath.trim() !== '') {
-    return path.isAbsolute(envPath)
-      ? envPath
-      : path.resolve(process.cwd(), envPath);
-  }
-
-  // Priority 2: Default path in data directory
-  return path.join(process.cwd(), 'data', 'employees.json');
-}
 
 /**
  * Employee data structure in JSON file
@@ -37,58 +29,59 @@ interface EmployeesData {
 }
 
 /**
- * Cached categories from JSON file
+ * Cached categories from builtin file
  */
 let cachedCategories: EmployeeCategoryConfig[] | null = null;
 
 /**
- * Load employees data from JSON file
+ * Load builtin employees data (read-only)
  */
-async function loadEmployeesData(): Promise<EmployeesData> {
-  const filePath = getEmployeesFilePath();
+async function loadBuiltinEmployeesData(): Promise<EmployeesData> {
   try {
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await fs.readFile(BUILTIN_EMPLOYEES_PATH, 'utf-8');
     const data = JSON.parse(content) as EmployeesData;
-    // Cache categories
+    // Cache categories from builtin
     cachedCategories = data.categories || [];
     return {
       categories: data.categories || [],
-      employees: data.employees || [],
+      employees: (data.employees || []).map(e => ({ ...e, is_builtin: true })),
     };
   } catch (error) {
-    console.error('[EmployeeService] Error loading employees:', error);
+    console.error('[EmployeeService] Error loading builtin employees:', error);
     return { categories: [], employees: [] };
   }
 }
 
 /**
- * Load employees from JSON file
+ * Load user employees data (read-write)
  */
-async function loadEmployees(): Promise<Employee[]> {
-  const data = await loadEmployeesData();
-  return data.employees;
+async function loadUserEmployeesData(): Promise<Employee[]> {
+  const filePath = getUserEmployeesPath();
+  try {
+    if (!fsSync.existsSync(filePath)) {
+      return [];
+    }
+    const content = await fs.readFile(filePath, 'utf-8');
+    const data = JSON.parse(content) as { employees: Employee[] };
+    return (data.employees || []).map(e => ({ ...e, is_builtin: false }));
+  } catch (error) {
+    console.error('[EmployeeService] Error loading user employees:', error);
+    return [];
+  }
 }
 
 /**
- * Save employees to JSON file (preserving categories)
+ * Save user employees to file
  */
-async function saveEmployees(employees: Employee[]): Promise<void> {
-  const filePath = getEmployeesFilePath();
+async function saveUserEmployees(employees: Employee[]): Promise<void> {
+  const filePath = getUserEmployeesPath();
   const dir = path.dirname(filePath);
 
   if (!fsSync.existsSync(dir)) {
     await fs.mkdir(dir, { recursive: true });
   }
 
-  // Load existing categories if not cached
-  if (!cachedCategories) {
-    await loadEmployeesData();
-  }
-
-  const data: EmployeesData = {
-    categories: cachedCategories || [],
-    employees,
-  };
+  const data = { employees };
   await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
@@ -100,27 +93,32 @@ function generateId(): string {
 }
 
 /**
- * Get all employees
+ * Get all employees (builtin + user)
+ * User employees with same ID will NOT override builtin (they have different ID patterns)
  */
 export async function getAllEmployees(): Promise<Employee[]> {
-  return loadEmployees();
+  const builtinData = await loadBuiltinEmployeesData();
+  const userEmployees = await loadUserEmployeesData();
+
+  // Merge: builtin first, then user
+  return [...builtinData.employees, ...userEmployees];
 }
 
 /**
  * Get employee by ID
  */
 export async function getEmployeeById(id: string): Promise<Employee | null> {
-  const employees = await loadEmployees();
+  const employees = await getAllEmployees();
   return employees.find((e) => e.id === id) || null;
 }
 
 /**
- * Create new employee
+ * Create new employee (always creates in user storage)
  */
 export async function createEmployee(
   input: CreateEmployeeInput
 ): Promise<Employee> {
-  const employees = await loadEmployees();
+  const userEmployees = await loadUserEmployeesData();
 
   const now = new Date().toISOString();
   const newEmployee: Employee = {
@@ -137,27 +135,38 @@ export async function createEmployee(
     updated_at: now,
   };
 
-  employees.push(newEmployee);
-  await saveEmployees(employees);
+  userEmployees.push(newEmployee);
+  await saveUserEmployees(userEmployees);
 
   return newEmployee;
 }
 
 /**
  * Update employee
+ * - Builtin employees: cannot be modified
+ * - User employees: can be modified
  */
 export async function updateEmployee(
   id: string,
   input: UpdateEmployeeInput
 ): Promise<Employee | null> {
-  const employees = await loadEmployees();
-  const index = employees.findIndex((e) => e.id === id);
+  // Check if it's a builtin employee
+  const builtinData = await loadBuiltinEmployeesData();
+  const isBuiltin = builtinData.employees.some(e => e.id === id);
+
+  if (isBuiltin) {
+    throw new Error('Cannot modify builtin employee');
+  }
+
+  // Update in user employees
+  const userEmployees = await loadUserEmployeesData();
+  const index = userEmployees.findIndex((e) => e.id === id);
 
   if (index === -1) {
     return null;
   }
 
-  const existing = employees[index];
+  const existing = userEmployees[index];
   const updated: Employee = {
     ...existing,
     name: input.name ?? existing.name,
@@ -171,8 +180,8 @@ export async function updateEmployee(
     updated_at: new Date().toISOString(),
   };
 
-  employees[index] = updated;
-  await saveEmployees(employees);
+  userEmployees[index] = updated;
+  await saveUserEmployees(userEmployees);
 
   return updated;
 }
@@ -181,19 +190,24 @@ export async function updateEmployee(
  * Delete employee (builtin employees cannot be deleted)
  */
 export async function deleteEmployee(id: string): Promise<boolean> {
-  const employees = await loadEmployees();
-  const employee = employees.find((e) => e.id === id);
+  // Check if it's a builtin employee
+  const builtinData = await loadBuiltinEmployeesData();
+  const isBuiltin = builtinData.employees.some(e => e.id === id);
+
+  if (isBuiltin) {
+    throw new Error('Cannot delete builtin employee');
+  }
+
+  // Delete from user employees
+  const userEmployees = await loadUserEmployeesData();
+  const employee = userEmployees.find((e) => e.id === id);
 
   if (!employee) {
     throw new Error(`Employee not found: ${id}`);
   }
 
-  if (employee.is_builtin) {
-    throw new Error('Cannot delete builtin employee');
-  }
-
-  const filtered = employees.filter((e) => e.id !== id);
-  await saveEmployees(filtered);
+  const filtered = userEmployees.filter((e) => e.id !== id);
+  await saveUserEmployees(filtered);
 
   return true;
 }
@@ -234,6 +248,6 @@ export async function getEmployeeCategories(): Promise<EmployeeCategoryConfig[]>
   if (cachedCategories) {
     return cachedCategories;
   }
-  const data = await loadEmployeesData();
+  const data = await loadBuiltinEmployeesData();
   return data.categories;
 }

@@ -562,3 +562,92 @@ export function getSkillSettingsPath(): string {
   const userSkillsDir = getUserSkillsDirectory();
   return path.join(path.dirname(userSkillsDir), 'skill-settings.json');
 }
+
+// ========== Employees ==========
+
+/**
+ * Get builtin employees file path (read-only, shipped with app)
+ */
+function getBuiltinEmployeesPath(): string {
+  // Priority 1: GOODABLE_RESOURCES_PATH (passed from Electron main to standalone subprocess)
+  const resourcesPath = process.env.GOODABLE_RESOURCES_PATH;
+  if (resourcesPath) {
+    const builtinPath = path.join(resourcesPath, 'builtin-employees.json');
+    if (fs.existsSync(builtinPath)) {
+      console.log(`[PathConfig] ✅ Builtin employees via GOODABLE_RESOURCES_PATH: ${builtinPath}`);
+      return builtinPath;
+    }
+  }
+
+  // Priority 2: Electron's process.resourcesPath (production)
+  const electronResourcesPath = (process as any).resourcesPath as string | undefined;
+  if (electronResourcesPath && fs.existsSync(electronResourcesPath)) {
+    const builtinPath = path.join(electronResourcesPath, 'builtin-employees.json');
+    if (fs.existsSync(builtinPath)) {
+      console.log(`[PathConfig] ✅ Builtin employees (production): ${builtinPath}`);
+      return builtinPath;
+    }
+  }
+
+  // Priority 3: Development fallback - use builtin-employees.json in project root
+  const builtinPath = path.join(process.cwd(), 'builtin-employees.json');
+  console.log(`[PathConfig] ✅ Builtin employees configured: ${builtinPath}`);
+  return builtinPath;
+}
+
+/**
+ * Absolute path to builtin employees file
+ */
+export const BUILTIN_EMPLOYEES_PATH = getBuiltinEmployeesPath();
+
+/**
+ * Get user employees directory path (writable, for user-created employees)
+ */
+function getUserEmployeesDirectory(): string {
+  // Priority 1: Environment variable (set by Electron main process)
+  const envUserEmployeesDir = process.env.USER_EMPLOYEES_DIR;
+  if (envUserEmployeesDir && envUserEmployeesDir.trim() !== '') {
+    const absolutePath = path.isAbsolute(envUserEmployeesDir)
+      ? path.resolve(envUserEmployeesDir)
+      : path.resolve(process.cwd(), envUserEmployeesDir);
+
+    try {
+      if (!fs.existsSync(absolutePath)) {
+        console.log(`[PathConfig] Creating user employees directory: ${absolutePath}`);
+        fs.mkdirSync(absolutePath, { recursive: true });
+      }
+      console.log(`[PathConfig] ✅ User employees directory configured: ${absolutePath}`);
+    } catch (error) {
+      console.warn(`[PathConfig] ⚠️ Cannot access user employees directory: ${absolutePath}`);
+    }
+
+    return absolutePath;
+  }
+
+  // Priority 2: Development fallback - use data/employees
+  const userEmployeesPath = path.join(process.cwd(), 'data', 'employees');
+
+  try {
+    if (!fs.existsSync(userEmployeesPath)) {
+      console.log(`[PathConfig] Creating user employees directory: ${userEmployeesPath}`);
+      fs.mkdirSync(userEmployeesPath, { recursive: true });
+    }
+    console.log(`[PathConfig] ✅ User employees directory configured: ${userEmployeesPath}`);
+  } catch (error) {
+    console.warn(`[PathConfig] ⚠️ Cannot access user employees directory: ${userEmployeesPath}`);
+  }
+
+  return userEmployeesPath;
+}
+
+/**
+ * Absolute path to user employees directory
+ */
+export const USER_EMPLOYEES_DIR_ABSOLUTE = getUserEmployeesDirectory();
+
+/**
+ * Get user employees file path
+ */
+export function getUserEmployeesPath(): string {
+  return path.join(USER_EMPLOYEES_DIR_ABSOLUTE, 'user-employees.json');
+}
