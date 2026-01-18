@@ -129,15 +129,23 @@ function WorkspaceContent() {
     }
   };
 
-  // Sync workMode with selected employee's mode after employees loaded
+  // Sync workMode and first_prompt with selected employee after employees loaded
   useEffect(() => {
     if (employees.length > 0 && selectedEmployeeId) {
       const emp = employees.find(e => e.id === selectedEmployeeId);
-      if (emp && emp.mode !== workMode) {
-        setWorkMode(emp.mode);
+      if (emp) {
+        if (emp.mode !== workMode) {
+          setWorkMode(emp.mode);
+        }
+        // Set first_prompt to input if no cached input exists
+        if (inputControl && !employeeInputCacheRef.current[selectedEmployeeId]) {
+          const prompt = emp.first_prompt ?? '';
+          inputControl.setMessage(prompt);
+          currentInputRef.current = prompt;
+        }
       }
     }
-  }, [employees, selectedEmployeeId]);
+  }, [employees, selectedEmployeeId, inputControl]);
 
   // Get employee name by ID for display
   const getEmployeeName = (employeeId: string | null | undefined): string | null => {
@@ -587,15 +595,12 @@ function WorkspaceContent() {
                 Goodable
               </h1>
               <p className="text-sm sm:text-base text-gray-600 mb-6 text-center">
-                {workMode === 'work'
-                  ? '本地电脑助手，帮你整理文件夹、提取报销单、解析合同、筛选简历等自动化任务！'
-                  : '开箱即用，内置1000+应用模板，专门为普通用户设计的软件生成器！'}
+                专门为超级个体打造的桌面智能体应用，内置 18 个数字员工，一个人就是一支队伍。
               </p>
               <ChatInput
                 onSendMessage={handleCreateProject}
                 disabled={isCreating}
                 placeholder="描述你想要的应用..."
-                defaultValue="做一个coze工作流一键变网站的工具"
                 mode="act"
                 workMode={workMode}
                 onWorkModeChange={setWorkMode}
