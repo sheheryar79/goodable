@@ -951,7 +951,9 @@ export async function executeClaude(
     }
 
     // Load enabled skills as plugins
-    const { getEnabledSkillPaths } = await import('@/lib/services/skill-service');
+    const { getEnabledSkillPaths, initializeBuiltinSkills } = await import('@/lib/services/skill-service');
+    // Ensure builtin skills are copied to user-skills directory
+    await initializeBuiltinSkills();
     const enabledSkillPaths = await getEnabledSkillPaths();
     const plugins = enabledSkillPaths.map(p => ({ type: 'local' as const, path: p }));
     if (plugins.length > 0) {

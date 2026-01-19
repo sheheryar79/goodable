@@ -45,7 +45,6 @@ interface SkillMeta {
   path: string;
   source: 'builtin' | 'user';
   size: number;
-  enabled: boolean;
 }
 
 function WorkspaceContent() {
@@ -226,24 +225,6 @@ function WorkspaceContent() {
       setSkillsLoading(false);
     }
   }, []);
-
-  // Toggle skill enabled state
-  const toggleSkillEnabled = async (skillName: string, enabled: boolean) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(skillName)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      });
-      if (response.ok) {
-        setSkills(prev => prev.map(s => s.name === skillName ? { ...s, enabled } : s));
-        setSkillsMessage({ type: 'success', text: enabled ? '已启用' : '已禁用' });
-      }
-    } catch (error) {
-      setSkillsMessage({ type: 'error', text: '操作失败' });
-    }
-    setTimeout(() => setSkillsMessage(null), 2000);
-  };
 
   // Delete skill
   const deleteSkill = async (skillName: string) => {
@@ -1357,16 +1338,6 @@ function WorkspaceContent() {
                         <p className="text-xs text-gray-400 mt-1">大小: {formatSize(skill.size)}</p>
                       </div>
                       <div className="flex items-center gap-3 ml-4">
-                        {/* Toggle Switch */}
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={skill.enabled}
-                            onChange={(e) => toggleSkillEnabled(skill.name, e.target.checked)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-900"></div>
-                        </label>
                         {/* Delete Button (only for user skills) */}
                         {skill.source === 'user' && (
                           <button
@@ -1385,7 +1356,7 @@ function WorkspaceContent() {
               {/* Footer Stats */}
               {skills.length > 0 && (
                 <div className="pt-4 border-t border-gray-200 text-sm text-gray-500">
-                  共 {skills.length} 个技能 | 已启用 {skills.filter(s => s.enabled).length} 个
+                  共 {skills.length} 个技能
                 </div>
               )}
             </div>

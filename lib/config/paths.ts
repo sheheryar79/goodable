@@ -554,15 +554,6 @@ function getUserSkillsDirectory(): string {
  */
 export const USER_SKILLS_DIR_ABSOLUTE = getUserSkillsDirectory();
 
-/**
- * Get skill settings file path (stores enabled/disabled state)
- */
-export function getSkillSettingsPath(): string {
-  // Use same directory as user skills
-  const userSkillsDir = getUserSkillsDirectory();
-  return path.join(path.dirname(userSkillsDir), 'skill-settings.json');
-}
-
 // ========== Employees ==========
 
 /**

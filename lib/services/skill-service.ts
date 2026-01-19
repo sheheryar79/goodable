@@ -10,7 +10,6 @@ import AdmZip from 'adm-zip';
 import {
   SKILLS_DIR_ABSOLUTE,
   USER_SKILLS_DIR_ABSOLUTE,
-  getSkillSettingsPath,
 } from '@/lib/config/paths';
 
 export interface SkillMeta {
@@ -19,36 +18,97 @@ export interface SkillMeta {
   path: string;
   source: 'builtin' | 'user';
   size: number;
-  enabled: boolean;
 }
 
-interface SkillSettings {
-  disabled: string[];
+// Flag to track if builtin skills have been initialized in this process
+let builtinSkillsInitialized = false;
+
+/**
+ * Copy directory recursively, skip node_modules
+ */
+async function copyDirSkipNodeModules(src: string, dest: string): Promise<void> {
+  await fs.mkdir(dest, { recursive: true });
+  const entries = await fs.readdir(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    // Skip node_modules directory
+    if (entry.name === 'node_modules') {
+      continue;
+    }
+
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDirSkipNodeModules(srcPath, destPath);
+    } else {
+      await fs.copyFile(srcPath, destPath);
+    }
+  }
 }
 
 /**
- * Get skill settings (disabled list)
+ * Copy a builtin skill to user-skills directory (overwrite if exists)
  */
-async function getSkillSettings(): Promise<SkillSettings> {
-  const settingsPath = getSkillSettingsPath();
+async function ensureSkillInUserDir(builtinSkillPath: string, skillName: string): Promise<void> {
+  const targetDir = path.join(USER_SKILLS_DIR_ABSOLUTE, skillName);
+
+  // Always overwrite to ensure latest version
+  if (fsSync.existsSync(targetDir)) {
+    // Remove old files but preserve node_modules if exists
+    const nodeModulesPath = path.join(targetDir, 'node_modules');
+    const hasNodeModules = fsSync.existsSync(nodeModulesPath);
+
+    if (hasNodeModules) {
+      // Preserve node_modules: remove all other files/dirs first
+      const entries = await fs.readdir(targetDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name !== 'node_modules') {
+          await fs.rm(path.join(targetDir, entry.name), { recursive: true, force: true });
+        }
+      }
+    } else {
+      await fs.rm(targetDir, { recursive: true, force: true });
+    }
+  }
+
+  await copyDirSkipNodeModules(builtinSkillPath, targetDir);
+  console.log(`[SkillService] Copied builtin skill to user-skills: ${skillName}`);
+}
+
+/**
+ * Initialize all builtin skills to user-skills directory
+ * Called on app startup, only runs once per process
+ */
+export async function initializeBuiltinSkills(): Promise<void> {
+  // Skip if already initialized in this process
+  if (builtinSkillsInitialized) {
+    return;
+  }
+
+  if (!fsSync.existsSync(SKILLS_DIR_ABSOLUTE)) {
+    console.log('[SkillService] Builtin skills directory not found, skipping initialization');
+    builtinSkillsInitialized = true;
+    return;
+  }
+
   try {
-    const content = await fs.readFile(settingsPath, 'utf-8');
-    return JSON.parse(content) as SkillSettings;
-  } catch {
-    return { disabled: [] };
-  }
-}
+    const entries = await fs.readdir(SKILLS_DIR_ABSOLUTE, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
 
-/**
- * Save skill settings
- */
-async function saveSkillSettings(settings: SkillSettings): Promise<void> {
-  const settingsPath = getSkillSettingsPath();
-  const dir = path.dirname(settingsPath);
-  if (!fsSync.existsSync(dir)) {
-    await fs.mkdir(dir, { recursive: true });
+      const skillPath = path.join(SKILLS_DIR_ABSOLUTE, entry.name);
+      const skillMdPath = path.join(skillPath, 'SKILL.md');
+
+      if (fsSync.existsSync(skillMdPath)) {
+        await ensureSkillInUserDir(skillPath, entry.name);
+      }
+    }
+    console.log('[SkillService] Builtin skills initialization completed');
+    builtinSkillsInitialized = true;
+  } catch (error) {
+    console.error('[SkillService] Error initializing builtin skills:', error);
   }
-  await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
 }
 
 /**
@@ -98,8 +158,7 @@ async function parseSkillMd(skillPath: string): Promise<{ name: string; descript
  */
 async function scanSkillsFromDir(
   dirPath: string,
-  source: 'builtin' | 'user',
-  disabledList: string[]
+  source: 'builtin' | 'user'
 ): Promise<SkillMeta[]> {
   const skills: SkillMeta[] = [];
 
@@ -123,7 +182,6 @@ async function scanSkillsFromDir(
           path: skillPath,
           source,
           size,
-          enabled: !disabledList.includes(parsed.name),
         });
       }
     }
@@ -139,14 +197,11 @@ async function scanSkillsFromDir(
  * User skills override builtin skills with same name
  */
 export async function getAllSkills(): Promise<SkillMeta[]> {
-  const settings = await getSkillSettings();
-  const disabledList = settings.disabled || [];
-
   // Scan builtin skills
-  const builtinSkills = await scanSkillsFromDir(SKILLS_DIR_ABSOLUTE, 'builtin', disabledList);
+  const builtinSkills = await scanSkillsFromDir(SKILLS_DIR_ABSOLUTE, 'builtin');
 
   // Scan user skills
-  const userSkills = await scanSkillsFromDir(USER_SKILLS_DIR_ABSOLUTE, 'user', disabledList);
+  const userSkills = await scanSkillsFromDir(USER_SKILLS_DIR_ABSOLUTE, 'user');
 
   // Merge: user skills override builtin with same name
   const skillMap = new Map<string, SkillMeta>();
@@ -224,7 +279,6 @@ export async function importSkill(sourcePath: string): Promise<SkillMeta> {
     path: skillDir,
     source: 'user',
     size,
-    enabled: true,
   };
 }
 
@@ -291,76 +345,33 @@ export async function deleteSkill(skillName: string): Promise<void> {
   }
 
   await fs.rm(skill.path, { recursive: true, force: true });
-
-  // Also remove from disabled list if present
-  const settings = await getSkillSettings();
-  settings.disabled = settings.disabled.filter(name => name !== skillName);
-  await saveSkillSettings(settings);
 }
 
 /**
- * Set skill enabled/disabled state
- */
-export async function setSkillEnabled(skillName: string, enabled: boolean): Promise<void> {
-  const settings = await getSkillSettings();
-
-  if (enabled) {
-    // Remove from disabled list
-    settings.disabled = settings.disabled.filter(name => name !== skillName);
-  } else {
-    // Add to disabled list
-    if (!settings.disabled.includes(skillName)) {
-      settings.disabled.push(skillName);
-    }
-  }
-
-  await saveSkillSettings(settings);
-}
-
-/**
- * Get enabled skill paths for SDK plugins configuration
- * Creates plugin wrapper directories with .claude-plugin/marketplace.json
- * Uses symlinks to create correct relative path structure
+ * Get skill paths for SDK plugins configuration
+ * All skills in user-skills directory are enabled by default
+ * Creates plugin wrapper with .claude-plugin/marketplace.json
  */
 export async function getEnabledSkillPaths(): Promise<string[]> {
   const skills = await getAllSkills();
-  const enabledSkills = skills.filter(s => s.enabled);
+  // Only use skills from user-skills directory (where builtin skills are copied to)
+  const userSkills = skills.filter(s => s.source === 'user');
 
-  if (enabledSkills.length === 0) {
+  if (userSkills.length === 0) {
     return [];
   }
 
-  // Create plugin wrapper with skills subdirectory
-  const wrapperDir = path.join(USER_SKILLS_DIR_ABSOLUTE, '.plugin-wrapper');
-  const pluginDir = path.join(wrapperDir, '.claude-plugin');
-  const skillsDir = path.join(wrapperDir, 'skills');
+  // Create plugin wrapper directory
+  const wrapperDir = path.join(USER_SKILLS_DIR_ABSOLUTE, '.claude-plugin');
 
-  // Ensure directories exist
-  await fs.mkdir(pluginDir, { recursive: true });
-  await fs.mkdir(skillsDir, { recursive: true });
+  // Ensure directory exists
+  await fs.mkdir(wrapperDir, { recursive: true });
 
-  // Create symlinks for each skill and collect relative paths
-  const skillsRelativePaths: string[] = [];
-
-  for (const skill of enabledSkills) {
-    const linkPath = path.join(skillsDir, skill.name);
-
-    // Remove existing symlink if present
-    try {
-      const stat = await fs.lstat(linkPath);
-      if (stat.isSymbolicLink() || stat.isDirectory()) {
-        await fs.rm(linkPath, { recursive: true, force: true });
-      }
-    } catch {
-      // Link doesn't exist, that's fine
-    }
-
-    // Create symlink to skill directory
-    // Windows: use 'junction' (no admin required), others: use 'dir'
-    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
-    await fs.symlink(skill.path, linkPath, linkType);
-    skillsRelativePaths.push(`./skills/${skill.name}`);
-  }
+  // Build relative paths using actual directory names (from skill.path)
+  const skillsRelativePaths = userSkills.map(skill => {
+    const dirName = path.basename(skill.path);
+    return `./${dirName}`;
+  });
 
   // Create marketplace.json
   const manifest = {
@@ -381,14 +392,15 @@ export async function getEnabledSkillPaths(): Promise<string[]> {
   };
 
   await fs.writeFile(
-    path.join(pluginDir, 'marketplace.json'),
+    path.join(wrapperDir, 'marketplace.json'),
     JSON.stringify(manifest, null, 2),
     'utf-8'
   );
 
-  console.log(`[SkillService] Created plugin wrapper with ${enabledSkills.length} skills:`, skillsRelativePaths);
+  console.log(`[SkillService] Created plugin wrapper with ${userSkills.length} skills:`, skillsRelativePaths);
 
-  return [wrapperDir];
+  // Return user-skills directory (parent of .claude-plugin)
+  return [USER_SKILLS_DIR_ABSOLUTE];
 }
 
 /**
