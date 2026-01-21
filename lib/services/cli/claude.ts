@@ -626,9 +626,11 @@ function resolveModelId(model?: string | null): string {
 /**
  * 加载并应用 Claude 配置到环境变量
  * 从 Global Settings 读取 apiUrl 和 apiKey，设置到 process.env
+ * 返回自定义模型 ID（如果有配置）
  */
-async function loadAndApplyClaudeConfig(): Promise<void> {
+async function loadAndApplyClaudeConfig(): Promise<string | undefined> {
   console.log('[ClaudeService] 🔧 开始加载 Claude 配置...');
+  let customModel: string | undefined;
   try {
     const { loadGlobalSettings } = await import('@/lib/services/settings');
     const globalSettings = await loadGlobalSettings();
@@ -661,12 +663,19 @@ async function loadAndApplyClaudeConfig(): Promise<void> {
       } else {
         console.log(`[ClaudeService] ⚠️  未配置 API Key/Token`);
       }
+
+      // 配置自定义模型 ID（用于第三方兼容 API，如火山豆包）
+      if (typeof claudeSettings.customModel === 'string' && claudeSettings.customModel.trim()) {
+        customModel = claudeSettings.customModel.trim();
+        console.log(`[ClaudeService] ✅ 使用自定义模型 ID: ${customModel}`);
+      }
     } else {
       console.log('[ClaudeService] ⚠️  Claude 配置项为空，使用默认环境变量');
     }
   } catch (error) {
     console.error('[ClaudeService] ❌ 无法加载 Claude 配置，将使用系统环境变量:', error);
   }
+  return customModel;
 }
 
 /**
@@ -690,10 +699,6 @@ export async function executeClaude(
   console.log(`\n========================================`);
   console.log(`[ClaudeService] 🚀 Starting Claude Agent SDK`);
   console.log(`[ClaudeService] Project: ${projectId}`);
-  const resolvedModel = resolveModelId(model);
-  const modelLabel = getClaudeModelDisplayName(resolvedModel);
-  const aliasNote = resolvedModel !== model ? ` (alias for ${model})` : '';
-  console.log(`[ClaudeService] Model: ${modelLabel} [${resolvedModel}]${aliasNote}`);
   console.log(`[ClaudeService] Session ID: ${sessionId || 'new session'}`);
   console.log(`[ClaudeService] Instruction: ${instruction.substring(0, 100)}...`);
   console.log(`========================================\n`);
@@ -793,8 +798,15 @@ export async function executeClaude(
   const originalPath = process.env.PATH || process.env.Path || '';
 
   try {
-    // 加载并应用 Claude 配置
-    await loadAndApplyClaudeConfig();
+    // 加载并应用 Claude 配置，获取自定义模型 ID
+    const customModel = await loadAndApplyClaudeConfig();
+
+    // 如果配置了自定义模型 ID，则覆盖传入的 model 参数
+    const finalModel = customModel || resolveModelId(model);
+    if (customModel) {
+      console.log(`[ClaudeService] 🔄 覆盖模型 ID: ${model} -> ${customModel}`);
+    }
+    console.log(`[ClaudeService] 🤖 Final Model: ${finalModel}`);
 
     // Verify project exists (prevents foreign key constraint errors)
     console.log(`[ClaudeService] 🔍 Verifying project exists...`);
@@ -840,7 +852,7 @@ export async function executeClaude(
     // Start Claude Agent SDK query
     console.log(`[ClaudeService] 🤖 Querying Claude Agent SDK...`);
     console.log(`[ClaudeService] 📁 Working Directory: ${absoluteProjectPath}`);
-    timelineLogger.logSDK(projectId, 'Query Claude Agent SDK', 'info', requestId, { cwd: absoluteProjectPath, model: resolvedModel }, 'sdk.start').catch(() => { });
+    timelineLogger.logSDK(projectId, 'Query Claude Agent SDK', 'info', requestId, { cwd: absoluteProjectPath, model: finalModel }, 'sdk.start').catch(() => { });
 
     // 平台检测：Windows下使用简化权限模式
     const isWindows = process.platform === 'win32';
@@ -913,7 +925,7 @@ export async function executeClaude(
       const promptPreview = instruction.substring(0, 500) + (instruction.length > 500 ? '...' : '');
       const systemPreview = systemPromptText.substring(0, 500) + (systemPromptText.length > 500 ? '...' : '');
       await timelineLogger.logSDK(projectId, '================== SDK 生成 START ==================', 'info', requestId, undefined, 'separator.sdk.generate.start');
-      await timelineLogger.logSDK(projectId, 'SDK generate start', 'info', requestId, { prompt: promptPreview, systemPrompt: systemPreview, model: resolvedModel }, 'sdk.generate.start');
+      await timelineLogger.logSDK(projectId, 'SDK generate start', 'info', requestId, { prompt: promptPreview, systemPrompt: systemPreview, model: finalModel }, 'sdk.generate.start');
     } catch { }
 
     // 注意：不要修改 process.env.DATABASE_URL！
@@ -1065,7 +1077,7 @@ export async function executeClaude(
       options: {
         cwd: absoluteProjectPath,
         additionalDirectories: [absoluteProjectPath],
-        model: resolvedModel,
+        model: finalModel,
         resume: sessionId,
         permissionMode: projectPermissionMode,
         systemPrompt: systemPromptText,
@@ -2046,10 +2058,6 @@ export async function generatePlan(
   console.log(`\n========================================`);
   console.log(`[ClaudeService] 🚀 Starting Planning`);
   console.log(`[ClaudeService] Project: ${projectId}`);
-  const resolvedModel = resolveModelId(model);
-  const modelLabel = getClaudeModelDisplayName(resolvedModel);
-  const aliasNote = resolvedModel !== model ? ` (alias for ${model})` : '';
-  console.log(`[ClaudeService] Model: ${modelLabel} [${resolvedModel}]${aliasNote}`);
   console.log(`[ClaudeService] Session ID: ${sessionId || 'new session'}`);
   console.log(`[ClaudeService] Instruction: ${instruction.substring(0, 100)}...`);
   console.log(`========================================\n`);
@@ -2067,8 +2075,15 @@ export async function generatePlan(
   publishStatus('planning_start');
 
   try {
-    // 加载并应用 Claude 配置
-    await loadAndApplyClaudeConfig();
+    // 加载并应用 Claude 配置，获取自定义模型 ID
+    const customModel = await loadAndApplyClaudeConfig();
+
+    // 如果配置了自定义模型 ID，则覆盖传入的 model 参数
+    const finalModel = customModel || resolveModelId(model);
+    if (customModel) {
+      console.log(`[ClaudeService] 🔄 覆盖模型 ID: ${model} -> ${customModel}`);
+    }
+    console.log(`[ClaudeService] 🤖 Final Model (Planning): ${finalModel}`);
 
     try {
       await timelineLogger.logSDK(projectId, 'SDK prepare start', 'info', requestId, { projectPath }, 'sdk.prepare.start');
@@ -2154,7 +2169,7 @@ export async function generatePlan(
       options: {
         cwd: projectPath,
         additionalDirectories: [projectPath],
-        model: resolvedModel,
+        model: finalModel,
         resume: sessionId,
         permissionMode: 'plan',
         systemPrompt: systemPromptText,

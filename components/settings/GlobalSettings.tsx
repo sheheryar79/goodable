@@ -132,6 +132,7 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
   const [apiKeyVisibility, setApiKeyVisibility] = useState<Record<string, boolean>>({});
   const [apiTestState, setApiTestState] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
   const [apiTestMessage, setApiTestMessage] = useState<Record<string, string>>({});
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState<Record<string, boolean>>({});
 
   // Show toast function
   const showToast = (message: string, type: 'success' | 'error') => {
@@ -366,6 +367,31 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
         nextCliSettings[cliId] = existing;
       } else {
         delete existing.apiUrl;
+        if (Object.keys(existing).length > 0) {
+          nextCliSettings[cliId] = existing;
+        } else {
+          delete nextCliSettings[cliId];
+        }
+      }
+
+      return {
+        ...prev,
+        cli_settings: nextCliSettings,
+      };
+    });
+  };
+
+  const setCliCustomModel = (cliId: string, customModel: string) => {
+    setGlobalSettings(prev => {
+      const nextCliSettings = { ...(prev?.cli_settings ?? {}) };
+      const existing = { ...(nextCliSettings[cliId] ?? {}) };
+      const trimmed = customModel.trim();
+
+      if (trimmed.length > 0) {
+        existing.customModel = trimmed;
+        nextCliSettings[cliId] = existing;
+      } else {
+        delete existing.customModel;
         if (Object.keys(existing).length > 0) {
           nextCliSettings[cliId] = existing;
         } else {
@@ -983,6 +1009,54 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
                                     Injected as <code className="font-mono">ANTHROPIC_AUTH_TOKEN</code>.
                                     Leave blank to use system environment variables.
                                   </p>
+                                </div>
+
+                                {/* Advanced Options Toggle */}
+                                <div className="pt-2 border-t border-gray-100">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setShowAdvancedOptions(prev => ({
+                                        ...prev,
+                                        [cli.id]: !prev[cli.id]
+                                      }));
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                                  >
+                                    <svg
+                                      className={`w-3.5 h-3.5 transition-transform ${showAdvancedOptions[cli.id] ? 'rotate-90' : ''}`}
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    高级选项
+                                  </button>
+
+                                  {/* Advanced Options Content */}
+                                  {showAdvancedOptions[cli.id] && (
+                                    <div className="mt-3 space-y-3 pl-1">
+                                      {/* Custom Model ID */}
+                                      <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-gray-600">
+                                          自定义模型 ID (Optional)
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={typeof settings.customModel === 'string' ? settings.customModel : ''}
+                                          onChange={(e) => setCliCustomModel(cli.id, e.target.value)}
+                                          placeholder="如: doubao-seed-code-preview-251028"
+                                          className="w-full px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                                        />
+                                        <p className="text-[11px] text-gray-500 leading-snug">
+                                          用于接入第三方兼容 API（如火山豆包）。填写后将覆盖上方模型选择器的值，留空则使用默认模型。
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
