@@ -242,10 +242,8 @@ export async function createProjectFromTemplate(
     throw new Error(`Template not found: ${templateId}`);
   }
 
-  // Generate project ID
-  const timestamp = Date.now();
-  const randomStr = Math.random().toString(36).substring(2, 15);
-  const projectId = `project-${timestamp}-${randomStr}`;
+  // Generate short project ID (8 chars, same format as frontend)
+  const projectId = `p-${Math.random().toString(36).substring(2, 10)}`;
 
   // Use template name as default project name
   const finalProjectName = projectName || template.name;
